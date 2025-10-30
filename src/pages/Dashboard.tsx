@@ -38,6 +38,7 @@ const Dashboard = () => {
   const [keywords, setKeywords] = useState<Keywords | null>(null);
   const [mapping, setMapping] = useState<ColumnMapping | null>(null);
   const [isExporting, setIsExporting] = useState(false);
+  const [isLoading, setIsLoading] = useState(true);
   const [dialogState, setDialogState] = useState<{
     open: boolean;
     title: string;
@@ -58,32 +59,39 @@ const Dashboard = () => {
   const [isManualOpen, setIsManualOpen] = useState(false);
 
   useEffect(() => {
-    const dataStr = sessionStorage.getItem('dashboardData');
-    if (!dataStr) {
-      toast.error('No data found. Please upload a file first.');
-      navigate('/');
-      return;
-    }
+    const loadData = async () => {
+      setIsLoading(true);
+      const dataStr = sessionStorage.getItem('dashboardData');
+      if (!dataStr) {
+        toast.error('No data found. Please upload a file first.');
+        navigate('/');
+        return;
+      }
 
-    try {
-      const data = JSON.parse(dataStr);
-      setAllRows(data.rows.map((r: any) => ({
-        ...r,
-        date: r.date ? new Date(r.date) : undefined,
-      })));
-      setDateRange({
-        min: data.dateRange.min ? new Date(data.dateRange.min) : null,
-        max: data.dateRange.max ? new Date(data.dateRange.max) : null,
-      });
-      setProviders(data.providers || []);
-      setWeeks(data.weeks || 1);
-      setKeywords(data.keywords);
-      setMapping(data.mapping);
-    } catch (error) {
-      console.error('Failed to load dashboard data:', error);
-      toast.error('Failed to load data. Please try uploading again.');
-      navigate('/');
-    }
+      try {
+        const data = JSON.parse(dataStr);
+        setAllRows(data.rows.map((r: any) => ({
+          ...r,
+          date: r.date ? new Date(r.date) : undefined,
+        })));
+        setDateRange({
+          min: data.dateRange.min ? new Date(data.dateRange.min) : null,
+          max: data.dateRange.max ? new Date(data.dateRange.max) : null,
+        });
+        setProviders(data.providers || []);
+        setWeeks(data.weeks || 1);
+        setKeywords(data.keywords);
+        setMapping(data.mapping);
+      } catch (error) {
+        console.error('Failed to load dashboard data:', error);
+        toast.error('Failed to load data. Please try uploading again.');
+        navigate('/');
+      } finally {
+        setIsLoading(false);
+      }
+    };
+
+    loadData();
   }, [navigate]);
 
   const filteredRows = useMemo(() => {
@@ -153,10 +161,13 @@ const Dashboard = () => {
     }
   };
 
-  if (!metrics || !keywords || !mapping) {
+  if (isLoading || !metrics || !keywords || !mapping) {
     return (
       <div className="min-h-screen flex items-center justify-center">
-        <Loader2 className="h-8 w-8 animate-spin text-primary" />
+        <div className="text-center space-y-4">
+          <Loader2 className="h-8 w-8 animate-spin text-primary mx-auto" />
+          <p className="text-muted-foreground">Loading dashboard data...</p>
+        </div>
       </div>
     );
   }
@@ -345,7 +356,7 @@ const Dashboard = () => {
                         id="manual-completed"
                         type="number"
                         value={manualCompleted}
-                        onChange={(e) => setManualCompleted(parseInt(e.target.value) || 0)}
+                        onChange={(e) => setManualCompleted(Math.max(0, Number(e.target.value) || 0))}
                         min="0"
                         placeholder="0"
                       />
@@ -357,7 +368,7 @@ const Dashboard = () => {
                         id="manual-cancelled"
                         type="number"
                         value={manualCancelled}
-                        onChange={(e) => setManualCancelled(parseInt(e.target.value) || 0)}
+                        onChange={(e) => setManualCancelled(Math.max(0, Number(e.target.value) || 0))}
                         min="0"
                         placeholder="0"
                       />
@@ -369,7 +380,7 @@ const Dashboard = () => {
                         id="manual-rescheduled"
                         type="number"
                         value={manualRescheduled}
-                        onChange={(e) => setManualRescheduled(parseInt(e.target.value) || 0)}
+                        onChange={(e) => setManualRescheduled(Math.max(0, Number(e.target.value) || 0))}
                         min="0"
                         placeholder="0"
                       />
