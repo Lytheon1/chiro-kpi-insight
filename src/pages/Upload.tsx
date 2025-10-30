@@ -116,12 +116,34 @@ const Upload = () => {
         )
       ).sort();
 
-      // Calculate weeks
+      // Calculate weeks based on actual weeks with data (not calendar span)
       let weeks = 1;
       if (minDate && maxDate) {
-        const diffTime = Math.abs(maxDate.getTime() - minDate.getTime());
-        const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24)) + 1;
-        weeks = Math.ceil(diffDays / 7);
+        // Create a set of unique week starts
+        const uniqueWeeks = new Set<string>();
+        
+        allRows.forEach(row => {
+          if (!row.date) return;
+          const date = row.date instanceof Date ? row.date : new Date(row.date);
+          if (isNaN(date.getTime())) return;
+          
+          // Get start of week (Monday)
+          const dateCopy = new Date(date);
+          const dayOfWeek = dateCopy.getDay();
+          const diff = dateCopy.getDate() - dayOfWeek + (dayOfWeek === 0 ? -6 : 1);
+          const weekStart = new Date(dateCopy.getFullYear(), dateCopy.getMonth(), diff);
+          weekStart.setHours(0, 0, 0, 0);
+          
+          uniqueWeeks.add(weekStart.toISOString().split('T')[0]);
+        });
+        
+        weeks = Math.max(1, uniqueWeeks.size); // Use actual number of weeks with data
+        
+        console.log('Week Calculation:', {
+          dateSpan: `${minDate.toLocaleDateString()} to ${maxDate.toLocaleDateString()}`,
+          actualWeeksWithData: weeks,
+          uniqueWeekStarts: Array.from(uniqueWeeks).sort()
+        });
       }
 
       // Store in session storage

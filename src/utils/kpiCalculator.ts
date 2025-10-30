@@ -97,10 +97,11 @@ export const calculateWeeklyData = (
     const date = row.date instanceof Date ? row.date : new Date(row.date);
     if (isNaN(date.getTime())) return;
 
-    // Get start of week (Monday)
-    const dayOfWeek = date.getDay();
-    const diff = date.getDate() - dayOfWeek + (dayOfWeek === 0 ? -6 : 1);
-    const weekStart = new Date(date.setDate(diff));
+    // Get start of week (Monday) - FIX: Don't mutate the original date
+    const dateCopy = new Date(date);
+    const dayOfWeek = dateCopy.getDay();
+    const diff = dateCopy.getDate() - dayOfWeek + (dayOfWeek === 0 ? -6 : 1);
+    const weekStart = new Date(dateCopy.getFullYear(), dateCopy.getMonth(), diff);
     weekStart.setHours(0, 0, 0, 0);
     
     const weekKey = weekStart.toISOString().split('T')[0];
