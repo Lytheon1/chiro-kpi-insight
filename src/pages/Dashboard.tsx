@@ -54,6 +54,7 @@ const Dashboard = () => {
   const [manualCompleted, setManualCompleted] = useState<number>(0);
   const [manualCancelled, setManualCancelled] = useState<number>(0);
   const [manualRescheduled, setManualRescheduled] = useState<number>(0);
+  const [manualWeeksOverride, setManualWeeksOverride] = useState<string>('');
   const [isManualOpen, setIsManualOpen] = useState(false);
 
   useEffect(() => {
@@ -91,9 +92,13 @@ const Dashboard = () => {
   }, [allRows, selectedProvider, mapping]);
 
   const effectiveWeeks = useMemo(() => {
-    const override = parseInt(weeksOverride);
-    return override > 0 ? override : weeks;
-  }, [weeks, weeksOverride]);
+    // First check manual adjustments override, then dashboard override, then calculated weeks
+    const manualOverride = parseInt(manualWeeksOverride);
+    if (manualOverride > 0) return manualOverride;
+    
+    const dashboardOverride = parseInt(weeksOverride);
+    return dashboardOverride > 0 ? dashboardOverride : weeks;
+  }, [weeks, weeksOverride, manualWeeksOverride]);
 
   const metrics = useMemo(() => {
     if (!keywords) return null;
@@ -270,6 +275,7 @@ const Dashboard = () => {
                   onChange={(e) => setWeeksOverride(e.target.value)}
                   min="1"
                 />
+                <p className="text-xs text-muted-foreground">Override calculated weeks ({weeks}) for all metrics</p>
               </div>
               <div className="space-y-2">
                 <Label htmlFor="rof-goal">ROF Goal (%)</Label>
@@ -332,7 +338,7 @@ const Dashboard = () => {
               </CardHeader>
               <CollapsibleContent>
                 <CardContent className="pt-0">
-                  <div className="grid gap-4 sm:grid-cols-3">
+                  <div className="grid gap-4 sm:grid-cols-4">
                     <div className="space-y-2">
                       <Label htmlFor="manual-completed">Completed Visits</Label>
                       <Input
@@ -369,6 +375,25 @@ const Dashboard = () => {
                       />
                       <p className="text-xs text-muted-foreground">Additional rescheduled visits</p>
                     </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="manual-weeks-override">Weeks Override</Label>
+                      <Input
+                        id="manual-weeks-override"
+                        type="number"
+                        value={manualWeeksOverride}
+                        onChange={(e) => setManualWeeksOverride(e.target.value)}
+                        min="1"
+                        placeholder={effectiveWeeks.toString()}
+                      />
+                      <p className="text-xs text-muted-foreground">Override for weekly calculations</p>
+                    </div>
+                  </div>
+                  <div className="mt-4 p-3 bg-muted/50 rounded-md">
+                    <p className="text-sm text-muted-foreground">
+                      <strong>Weeks Override:</strong> Controls how many weeks are used to calculate weekly averages and rates. 
+                      The system auto-calculates weeks based on your data ({weeks} weeks detected), but you can override this 
+                      if your reporting period differs. The Manual Adjustments override takes priority.
+                    </p>
                   </div>
                 </CardContent>
               </CollapsibleContent>
