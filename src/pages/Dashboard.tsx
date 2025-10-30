@@ -48,6 +48,12 @@ const Dashboard = () => {
     description: '',
     appointments: [],
   });
+  
+  // Manual entry state
+  const [manualEntries, setManualEntries] = useState<AppointmentRow[]>([]);
+  const [manualEntryType, setManualEntryType] = useState<string>('completed');
+  const [manualEntryProvider, setManualEntryProvider] = useState<string>('');
+  const [manualEntryPurpose, setManualEntryPurpose] = useState<string>('');
 
   useEffect(() => {
     const dataStr = sessionStorage.getItem('dashboardData');
@@ -78,10 +84,15 @@ const Dashboard = () => {
     }
   }, [navigate]);
 
+  // Combine original rows with manual entries
+  const combinedRows = useMemo(() => {
+    return [...allRows, ...manualEntries];
+  }, [allRows, manualEntries]);
+
   const filteredRows = useMemo(() => {
-    if (selectedProvider === 'All' || !mapping) return allRows;
-    return allRows.filter(r => r[mapping.provider] === selectedProvider);
-  }, [allRows, selectedProvider, mapping]);
+    if (selectedProvider === 'All' || !mapping) return combinedRows;
+    return combinedRows.filter(r => r[mapping.provider] === selectedProvider);
+  }, [combinedRows, selectedProvider, mapping]);
 
   const effectiveWeeks = useMemo(() => {
     const override = parseInt(weeksOverride);
@@ -121,6 +132,37 @@ const Dashboard = () => {
     } finally {
       setIsExporting(false);
     }
+  };
+
+  const handleAddManualEntry = () => {
+    if (!mapping || !keywords) return;
+    
+    if (!manualEntryProvider) {
+      toast.error('Please select a provider');
+      return;
+    }
+
+    // Create a manual entry with proper normalization
+    const newEntry: AppointmentRow = {
+      [mapping.status]: manualEntryType,
+      [mapping.provider]: manualEntryProvider,
+      [mapping.purpose]: manualEntryPurpose || '',
+      [mapping.date]: new Date(),
+      [mapping.patient]: 'Manual Entry',
+      _statusNormalized: manualEntryType.toLowerCase(),
+      _purposeNormalized: manualEntryPurpose.toLowerCase(),
+      date: new Date(),
+      isManual: true,
+    };
+
+    setManualEntries([...manualEntries, newEntry]);
+    
+    // Reset form
+    setManualEntryType('completed');
+    setManualEntryProvider('');
+    setManualEntryPurpose('');
+    
+    toast.success(`Manual ${manualEntryType} visit added`);
   };
 
   if (!metrics || !keywords || !mapping) {
@@ -220,21 +262,76 @@ const Dashboard = () => {
               <CardTitle>Dashboard Controls</CardTitle>
               <CardDescription>Filter data and adjust goals</CardDescription>
             </CardHeader>
-            <CardContent className="grid gap-4 sm:grid-cols-2 lg:grid-cols-6">
-              <div className="space-y-2">
-                <Label htmlFor="provider-filter">Provider</Label>
-                <Select value={selectedProvider} onValueChange={setSelectedProvider}>
-                  <SelectTrigger id="provider-filter">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="All">All Providers</SelectItem>
-                    {providers.map(p => (
-                      <SelectItem key={p} value={p}>{p}</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+            <CardContent className="space-y-6">
+              {/* Manual Entry Section */}
+              <div className="pb-6 border-b">
+                <h3 className="text-sm font-semibold mb-4">Add Manual Visit</h3>
+                <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-5">
+                  <div className="space-y-2">
+                    <Label htmlFor="manual-type">Visit Type</Label>
+                    <Select value={manualEntryType} onValueChange={setManualEntryType}>
+                      <SelectTrigger id="manual-type">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="completed">Completed</SelectItem>
+                        <SelectItem value="cancelled">Cancelled</SelectItem>
+                        <SelectItem value="rescheduled">Rescheduled</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="manual-provider">Provider</Label>
+                    <Select value={manualEntryProvider} onValueChange={setManualEntryProvider}>
+                      <SelectTrigger id="manual-provider">
+                        <SelectValue placeholder="Select provider" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {providers.map(p => (
+                          <SelectItem key={p} value={p}>{p}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="manual-purpose">Purpose (Optional)</Label>
+                    <Input
+                      id="manual-purpose"
+                      placeholder="e.g., ROF"
+                      value={manualEntryPurpose}
+                      onChange={(e) => setManualEntryPurpose(e.target.value)}
+                    />
+                  </div>
+                  <div className="space-y-2 lg:col-span-2">
+                    <Label>&nbsp;</Label>
+                    <Button onClick={handleAddManualEntry} className="w-full">
+                      Add Visit
+                    </Button>
+                  </div>
+                </div>
+                {manualEntries.length > 0 && (
+                  <p className="text-sm text-muted-foreground mt-2">
+                    {manualEntries.length} manual {manualEntries.length === 1 ? 'entry' : 'entries'} added
+                  </p>
+                )}
               </div>
+
+              {/* Existing Controls */}
+              <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-6">
+                <div className="space-y-2">
+                  <Label htmlFor="provider-filter">Provider</Label>
+                  <Select value={selectedProvider} onValueChange={setSelectedProvider}>
+                    <SelectTrigger id="provider-filter">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="All">All Providers</SelectItem>
+                      {providers.map(p => (
+                        <SelectItem key={p} value={p}>{p}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
               <div className="space-y-2">
                 <Label htmlFor="weeks-override">Weeks Override</Label>
                 <Input
@@ -287,6 +384,7 @@ const Dashboard = () => {
                   onChange={(e) => setGoals({ ...goals, weeklyKept: parseInt(e.target.value) || 0 })}
                   min="0"
                 />
+              </div>
               </div>
             </CardContent>
           </Card>
