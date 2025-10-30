@@ -5,6 +5,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import { KPICard } from '@/components/KPICard';
 import { WeeklyChart } from '@/components/WeeklyChart';
 import { ROFChart } from '@/components/ROFChart';
@@ -16,7 +17,7 @@ import { AppointmentRow, Goals, Keywords, ColumnMapping } from '@/types/dashboar
 import { calculateKPIs, getKPIStatus, calculateWeeklyData, isROF, isCompleted, isMassage, isScheduled } from '@/utils/kpiCalculator';
 import { exportToCSV, exportDashboardImage } from '@/utils/exportUtils';
 import { toast } from 'sonner';
-import { ArrowLeft, Download, FileImage, Loader2 } from 'lucide-react';
+import { ArrowLeft, Download, FileImage, Loader2, ChevronDown } from 'lucide-react';
 
 const defaultGoals: Goals = {
   rofRate: 74,
@@ -49,11 +50,11 @@ const Dashboard = () => {
     appointments: [],
   });
   
-  // Manual entry state
-  const [manualEntries, setManualEntries] = useState<AppointmentRow[]>([]);
-  const [manualEntryType, setManualEntryType] = useState<string>('completed');
-  const [manualEntryProvider, setManualEntryProvider] = useState<string>('');
-  const [manualEntryPurpose, setManualEntryPurpose] = useState<string>('');
+  // Manual adjustments for visit counts
+  const [manualCompleted, setManualCompleted] = useState<number>(0);
+  const [manualCancelled, setManualCancelled] = useState<number>(0);
+  const [manualRescheduled, setManualRescheduled] = useState<number>(0);
+  const [isManualOpen, setIsManualOpen] = useState(false);
 
   useEffect(() => {
     const dataStr = sessionStorage.getItem('dashboardData');
@@ -84,15 +85,10 @@ const Dashboard = () => {
     }
   }, [navigate]);
 
-  // Combine original rows with manual entries
-  const combinedRows = useMemo(() => {
-    return [...allRows, ...manualEntries];
-  }, [allRows, manualEntries]);
-
   const filteredRows = useMemo(() => {
-    if (selectedProvider === 'All' || !mapping) return combinedRows;
-    return combinedRows.filter(r => r[mapping.provider] === selectedProvider);
-  }, [combinedRows, selectedProvider, mapping]);
+    if (selectedProvider === 'All' || !mapping) return allRows;
+    return allRows.filter(r => r[mapping.provider] === selectedProvider);
+  }, [allRows, selectedProvider, mapping]);
 
   const effectiveWeeks = useMemo(() => {
     const override = parseInt(weeksOverride);
@@ -101,8 +97,26 @@ const Dashboard = () => {
 
   const metrics = useMemo(() => {
     if (!keywords) return null;
-    return calculateKPIs(filteredRows, keywords, effectiveWeeks);
-  }, [filteredRows, keywords, effectiveWeeks]);
+    const baseMetrics = calculateKPIs(filteredRows, keywords, effectiveWeeks);
+    
+    // Apply manual adjustments
+    const adjustedMetrics = {
+      ...baseMetrics,
+      completedNonMassage: baseMetrics.completedNonMassage + manualCompleted,
+      scheduledNonMassage: baseMetrics.scheduledNonMassage + manualCompleted + manualCancelled + manualRescheduled,
+      totalKeptNonMassage: baseMetrics.totalKeptNonMassage + manualCompleted,
+    };
+    
+    // Recalculate rates with adjusted values
+    adjustedMetrics.retentionRate = adjustedMetrics.scheduledNonMassage > 0 
+      ? (adjustedMetrics.completedNonMassage / adjustedMetrics.scheduledNonMassage) * 100 
+      : 0;
+    adjustedMetrics.weeklyAverage = effectiveWeeks > 0 
+      ? adjustedMetrics.completedNonMassage / effectiveWeeks 
+      : 0;
+    
+    return adjustedMetrics;
+  }, [filteredRows, keywords, effectiveWeeks, manualCompleted, manualCancelled, manualRescheduled]);
 
   const weeklyData = useMemo(() => {
     if (!keywords) return [];
@@ -132,37 +146,6 @@ const Dashboard = () => {
     } finally {
       setIsExporting(false);
     }
-  };
-
-  const handleAddManualEntry = () => {
-    if (!mapping || !keywords) return;
-    
-    if (!manualEntryProvider) {
-      toast.error('Please select a provider');
-      return;
-    }
-
-    // Create a manual entry with proper normalization
-    const newEntry: AppointmentRow = {
-      [mapping.status]: manualEntryType,
-      [mapping.provider]: manualEntryProvider,
-      [mapping.purpose]: manualEntryPurpose || '',
-      [mapping.date]: new Date(),
-      [mapping.patient]: 'Manual Entry',
-      _statusNormalized: manualEntryType.toLowerCase(),
-      _purposeNormalized: manualEntryPurpose.toLowerCase(),
-      date: new Date(),
-      isManual: true,
-    };
-
-    setManualEntries([...manualEntries, newEntry]);
-    
-    // Reset form
-    setManualEntryType('completed');
-    setManualEntryProvider('');
-    setManualEntryPurpose('');
-    
-    toast.success(`Manual ${manualEntryType} visit added`);
   };
 
   if (!metrics || !keywords || !mapping) {
@@ -262,76 +245,21 @@ const Dashboard = () => {
               <CardTitle>Dashboard Controls</CardTitle>
               <CardDescription>Filter data and adjust goals</CardDescription>
             </CardHeader>
-            <CardContent className="space-y-6">
-              {/* Manual Entry Section */}
-              <div className="pb-6 border-b">
-                <h3 className="text-sm font-semibold mb-4">Add Manual Visit</h3>
-                <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-5">
-                  <div className="space-y-2">
-                    <Label htmlFor="manual-type">Visit Type</Label>
-                    <Select value={manualEntryType} onValueChange={setManualEntryType}>
-                      <SelectTrigger id="manual-type">
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="completed">Completed</SelectItem>
-                        <SelectItem value="cancelled">Cancelled</SelectItem>
-                        <SelectItem value="rescheduled">Rescheduled</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="manual-provider">Provider</Label>
-                    <Select value={manualEntryProvider} onValueChange={setManualEntryProvider}>
-                      <SelectTrigger id="manual-provider">
-                        <SelectValue placeholder="Select provider" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {providers.map(p => (
-                          <SelectItem key={p} value={p}>{p}</SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="manual-purpose">Purpose (Optional)</Label>
-                    <Input
-                      id="manual-purpose"
-                      placeholder="e.g., ROF"
-                      value={manualEntryPurpose}
-                      onChange={(e) => setManualEntryPurpose(e.target.value)}
-                    />
-                  </div>
-                  <div className="space-y-2 lg:col-span-2">
-                    <Label>&nbsp;</Label>
-                    <Button onClick={handleAddManualEntry} className="w-full">
-                      Add Visit
-                    </Button>
-                  </div>
-                </div>
-                {manualEntries.length > 0 && (
-                  <p className="text-sm text-muted-foreground mt-2">
-                    {manualEntries.length} manual {manualEntries.length === 1 ? 'entry' : 'entries'} added
-                  </p>
-                )}
+            <CardContent className="grid gap-4 sm:grid-cols-2 lg:grid-cols-6">
+              <div className="space-y-2">
+                <Label htmlFor="provider-filter">Provider</Label>
+                <Select value={selectedProvider} onValueChange={setSelectedProvider}>
+                  <SelectTrigger id="provider-filter">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="All">All Providers</SelectItem>
+                    {providers.map(p => (
+                      <SelectItem key={p} value={p}>{p}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
               </div>
-
-              {/* Existing Controls */}
-              <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-6">
-                <div className="space-y-2">
-                  <Label htmlFor="provider-filter">Provider</Label>
-                  <Select value={selectedProvider} onValueChange={setSelectedProvider}>
-                    <SelectTrigger id="provider-filter">
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="All">All Providers</SelectItem>
-                      {providers.map(p => (
-                        <SelectItem key={p} value={p}>{p}</SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
               <div className="space-y-2">
                 <Label htmlFor="weeks-override">Weeks Override</Label>
                 <Input
@@ -385,9 +313,67 @@ const Dashboard = () => {
                   min="0"
                 />
               </div>
-              </div>
             </CardContent>
           </Card>
+
+          {/* Manual Visit Adjustments */}
+          <Collapsible open={isManualOpen} onOpenChange={setIsManualOpen}>
+            <Card>
+              <CardHeader className="pb-3">
+                <CollapsibleTrigger asChild>
+                  <div className="flex items-center justify-between cursor-pointer">
+                    <div>
+                      <CardTitle className="text-base">Manual Visit Adjustments</CardTitle>
+                      <CardDescription>Add additional visits to calculations</CardDescription>
+                    </div>
+                    <ChevronDown className={`h-4 w-4 transition-transform ${isManualOpen ? 'rotate-180' : ''}`} />
+                  </div>
+                </CollapsibleTrigger>
+              </CardHeader>
+              <CollapsibleContent>
+                <CardContent className="pt-0">
+                  <div className="grid gap-4 sm:grid-cols-3">
+                    <div className="space-y-2">
+                      <Label htmlFor="manual-completed">Completed Visits</Label>
+                      <Input
+                        id="manual-completed"
+                        type="number"
+                        value={manualCompleted}
+                        onChange={(e) => setManualCompleted(parseInt(e.target.value) || 0)}
+                        min="0"
+                        placeholder="0"
+                      />
+                      <p className="text-xs text-muted-foreground">Additional completed visits</p>
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="manual-cancelled">Cancelled Visits</Label>
+                      <Input
+                        id="manual-cancelled"
+                        type="number"
+                        value={manualCancelled}
+                        onChange={(e) => setManualCancelled(parseInt(e.target.value) || 0)}
+                        min="0"
+                        placeholder="0"
+                      />
+                      <p className="text-xs text-muted-foreground">Additional cancelled visits</p>
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="manual-rescheduled">Rescheduled Visits</Label>
+                      <Input
+                        id="manual-rescheduled"
+                        type="number"
+                        value={manualRescheduled}
+                        onChange={(e) => setManualRescheduled(parseInt(e.target.value) || 0)}
+                        min="0"
+                        placeholder="0"
+                      />
+                      <p className="text-xs text-muted-foreground">Additional rescheduled visits</p>
+                    </div>
+                  </div>
+                </CardContent>
+              </CollapsibleContent>
+            </Card>
+          </Collapsible>
 
           {/* KPI Cards */}
           <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
