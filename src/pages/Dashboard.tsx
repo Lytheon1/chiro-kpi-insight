@@ -269,7 +269,7 @@ const Dashboard = () => {
                 />
               </div>
               <div className="space-y-2">
-                <Label htmlFor="quarterly-goal">Quarterly Target</Label>
+                <Label htmlFor="quarterly-goal">Quarterly Target of Kept Appointments</Label>
                 <Input
                   id="quarterly-goal"
                   type="number"
