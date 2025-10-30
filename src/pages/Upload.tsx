@@ -15,6 +15,7 @@ const defaultMapping: ColumnMapping = {
   purpose: 'Purpose',
   provider: 'Provider',
   date: 'Date',
+  patient: 'Patient',
 };
 
 const defaultKeywords: Keywords = {

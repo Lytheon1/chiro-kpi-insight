@@ -49,6 +49,7 @@ export const detectColumnMapping = (headers: string[]): ColumnMapping => {
     purpose: findColumn(['Purpose', 'Appointment Type', 'Type', 'J']),
     provider: findColumn(['Provider', 'G']),
     date: findColumn(['Date', 'Appointment Date', 'A']),
+    patient: findColumn(['Patient', 'Patient Name', 'Name', 'B']),
   };
 };
 

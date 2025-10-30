@@ -50,6 +50,15 @@ export const ColumnMapper = ({ mapping, onMappingChange }: ColumnMapperProps) =>
           />
         </div>
         <div className="space-y-2">
+          <Label htmlFor="patient-col">Patient Column</Label>
+          <Input
+            id="patient-col"
+            value={mapping.patient}
+            onChange={(e) => handleChange('patient', e.target.value)}
+            placeholder="Patient or B"
+          />
+        </div>
+        <div className="space-y-2">
           <Label htmlFor="date-col">Date Column</Label>
           <Input
             id="date-col"

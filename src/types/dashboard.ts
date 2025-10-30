@@ -13,6 +13,7 @@ export interface ColumnMapping {
   purpose: string;
   provider: string;
   date: string;
+  patient: string;
 }
 
 export interface Keywords {
