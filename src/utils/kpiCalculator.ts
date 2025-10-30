@@ -44,6 +44,16 @@ export const calculateKPIs = (
   const retentionRate = scheduledNonMassage > 0 ? (completedNonMassage / scheduledNonMassage) * 100 : 0;
   const weeklyAverage = weeks > 0 ? completedNonMassage / weeks : 0;
 
+  console.log('KPI Calculation Debug:', {
+    totalRows: rows.length,
+    weeks,
+    scheduledROF,
+    completedROF,
+    scheduledNonMassage,
+    completedNonMassage,
+    weeklyAverage: weeklyAverage.toFixed(2),
+  });
+
   return {
     scheduledROF,
     completedROF,
