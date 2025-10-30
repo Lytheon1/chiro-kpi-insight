@@ -9,9 +9,10 @@ interface KPICardProps {
   status?: 'success' | 'warning' | 'error';
   subtitle?: string;
   variance?: string;
+  onClick?: () => void;
 }
 
-export const KPICard = ({ title, value, goal, status, subtitle, variance }: KPICardProps) => {
+export const KPICard = ({ title, value, goal, status, subtitle, variance, onClick }: KPICardProps) => {
   const getStatusColor = () => {
     switch (status) {
       case 'success':
@@ -50,7 +51,14 @@ export const KPICard = ({ title, value, goal, status, subtitle, variance }: KPIC
   };
 
   return (
-    <Card className={cn('border-2', status && getStatusBg())}>
+    <Card 
+      className={cn(
+        'border-2',
+        status && getStatusBg(),
+        onClick && 'cursor-pointer hover:bg-accent/50 transition-colors'
+      )}
+      onClick={onClick}
+    >
       <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
         <CardTitle className="text-sm font-medium">{title}</CardTitle>
         {status && (

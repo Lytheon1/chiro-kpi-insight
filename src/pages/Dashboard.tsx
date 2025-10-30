@@ -10,8 +10,10 @@ import { WeeklyChart } from '@/components/WeeklyChart';
 import { ROFChart } from '@/components/ROFChart';
 import { RetentionChart } from '@/components/RetentionChart';
 import { DataTable } from '@/components/DataTable';
+import { VisitTypeGroups } from '@/components/VisitTypeGroups';
+import { AppointmentDetailsDialog } from '@/components/AppointmentDetailsDialog';
 import { AppointmentRow, Goals, Keywords, ColumnMapping } from '@/types/dashboard';
-import { calculateKPIs, getKPIStatus, calculateWeeklyData } from '@/utils/kpiCalculator';
+import { calculateKPIs, getKPIStatus, calculateWeeklyData, isROF, isCompleted, isMassage, isScheduled } from '@/utils/kpiCalculator';
 import { exportToCSV, exportDashboardImage } from '@/utils/exportUtils';
 import { toast } from 'sonner';
 import { ArrowLeft, Download, FileImage, Loader2 } from 'lucide-react';
@@ -35,6 +37,17 @@ const Dashboard = () => {
   const [keywords, setKeywords] = useState<Keywords | null>(null);
   const [mapping, setMapping] = useState<ColumnMapping | null>(null);
   const [isExporting, setIsExporting] = useState(false);
+  const [dialogState, setDialogState] = useState<{
+    open: boolean;
+    title: string;
+    description: string;
+    appointments: AppointmentRow[];
+  }>({
+    open: false,
+    title: '',
+    description: '',
+    appointments: [],
+  });
 
   useEffect(() => {
     const dataStr = sessionStorage.getItem('dashboardData');
@@ -122,6 +135,64 @@ const Dashboard = () => {
   const retentionStatus = getKPIStatus(metrics.retentionRate, goals.retentionRate, true);
   const quarterlyStatus = getKPIStatus(metrics.totalKeptNonMassage, goals.quarterlyKept, false);
   const weeklyStatus = getKPIStatus(metrics.weeklyAverage, goals.weeklyKept, false);
+
+  const getROFAppointments = (completedOnly: boolean = false) => {
+    return filteredRows.filter(r => {
+      const rofMatch = isROF(r, keywords);
+      const scheduledMatch = isScheduled(r, keywords);
+      if (completedOnly) {
+        return rofMatch && isCompleted(r, keywords);
+      }
+      return rofMatch && scheduledMatch;
+    });
+  };
+
+  const getRetentionAppointments = (completedOnly: boolean = false) => {
+    return filteredRows.filter(r => {
+      const nonMassage = !isMassage(r, keywords);
+      const scheduledMatch = isScheduled(r, keywords);
+      if (completedOnly) {
+        return nonMassage && isCompleted(r, keywords);
+      }
+      return nonMassage && scheduledMatch;
+    });
+  };
+
+  const handleKPIClick = (kpiType: 'rof' | 'retention' | 'total' | 'weekly') => {
+    let title = '';
+    let description = '';
+    let appointments: AppointmentRow[] = [];
+
+    switch (kpiType) {
+      case 'rof':
+        appointments = getROFAppointments();
+        title = 'ROF Appointments';
+        description = `${metrics.completedROF} completed of ${metrics.scheduledROF} scheduled`;
+        break;
+      case 'retention':
+        appointments = getRetentionAppointments();
+        title = 'Retention Appointments (Excluding Massage)';
+        description = `${metrics.completedNonMassage} completed of ${metrics.scheduledNonMassage} scheduled`;
+        break;
+      case 'total':
+        appointments = getRetentionAppointments(true);
+        title = 'Total Kept Appointments (Excluding Massage)';
+        description = `${metrics.totalKeptNonMassage} appointments for ${effectiveWeeks} week period`;
+        break;
+      case 'weekly':
+        appointments = getRetentionAppointments(true);
+        title = 'Weekly Average Appointments';
+        description = `${metrics.weeklyAverage.toFixed(1)} appointments per week`;
+        break;
+    }
+
+    setDialogState({
+      open: true,
+      title,
+      description,
+      appointments,
+    });
+  };
 
   return (
     <div className="min-h-screen bg-background">
@@ -229,6 +300,7 @@ const Dashboard = () => {
               status={rofStatus}
               subtitle={`${metrics.completedROF} of ${metrics.scheduledROF} ROF appointments`}
               variance={`${metrics.rofCompletionRate >= goals.rofRate ? '+' : ''}${(metrics.rofCompletionRate - goals.rofRate).toFixed(1)}% vs goal`}
+              onClick={() => handleKPIClick('rof')}
             />
             <KPICard
               title="Retention Rate"
@@ -237,6 +309,7 @@ const Dashboard = () => {
               status={retentionStatus}
               subtitle="Excluding massage appointments"
               variance={`${metrics.retentionRate >= goals.retentionRate ? '+' : ''}${(metrics.retentionRate - goals.retentionRate).toFixed(1)}% vs goal`}
+              onClick={() => handleKPIClick('retention')}
             />
             <KPICard
               title="Total Kept Appointments"
@@ -245,6 +318,7 @@ const Dashboard = () => {
               status={quarterlyStatus}
               subtitle={`For ${effectiveWeeks} week period`}
               variance={`${metrics.totalKeptNonMassage >= goals.quarterlyKept ? '+' : ''}${metrics.totalKeptNonMassage - goals.quarterlyKept} vs goal`}
+              onClick={() => handleKPIClick('total')}
             />
             <KPICard
               title="Weekly Average"
@@ -253,8 +327,12 @@ const Dashboard = () => {
               status={weeklyStatus}
               subtitle="Kept appointments per week"
               variance={`${metrics.weeklyAverage >= goals.weeklyKept ? '+' : ''}${(metrics.weeklyAverage - goals.weeklyKept).toFixed(1)} vs goal`}
+              onClick={() => handleKPIClick('weekly')}
             />
           </div>
+
+          {/* Visit Type Groups */}
+          <VisitTypeGroups rows={filteredRows} keywords={keywords} mapping={mapping} />
 
           {/* Charts */}
           {weeklyData.length > 0 && (
@@ -270,6 +348,16 @@ const Dashboard = () => {
           {/* Data Table */}
           <DataTable rows={filteredRows} mapping={mapping} />
         </div>
+
+        {/* Appointment Details Dialog */}
+        <AppointmentDetailsDialog
+          open={dialogState.open}
+          onOpenChange={(open) => setDialogState({ ...dialogState, open })}
+          title={dialogState.title}
+          description={dialogState.description}
+          appointments={dialogState.appointments}
+          mapping={mapping}
+        />
 
         {/* Export Buttons */}
         <div className="mt-6 flex gap-3 justify-end">
