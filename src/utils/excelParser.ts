@@ -34,26 +34,22 @@ export const detectColumnMapping = (headers: string[]): ColumnMapping => {
     if (h) headerMap[normalizeString(h)] = i;
   });
 
-  // Enhanced keyword matching for flexible column detection
-  const findColumn = (keywords: string[]): string => {
-    for (const header in headerMap) {
-      for (const keyword of keywords) {
-        const normalizedKeyword = normalizeString(keyword);
-        if (header.includes(normalizedKeyword)) {
-          return headers[headerMap[header]];
-        }
+  const findColumn = (possibilities: string[]): string => {
+    for (const p of possibilities) {
+      const normalized = normalizeString(p);
+      if (headerMap[normalized] !== undefined) {
+        return headers[headerMap[normalized]];
       }
     }
-    // Return first keyword as fallback
-    return keywords[0];
+    return possibilities[0];
   };
 
   return {
-    status: findColumn(['status', 'appt status', 'appointment status', 'c']),
-    purpose: findColumn(['purpose', 'appointment type', 'appt type', 'type', 'visit type', 'j']),
-    provider: findColumn(['provider', 'doctor', 'clinician', 'g']),
-    date: findColumn(['date', 'appt date', 'appointment date', 'visit date', 'a']),
-    patient: findColumn(['patient', 'patient name', 'name', 'client', 'b']),
+    status: findColumn(['Status', 'C']),
+    purpose: findColumn(['Purpose', 'Appointment Type', 'Type', 'J']),
+    provider: findColumn(['Provider', 'G']),
+    date: findColumn(['Date', 'Appointment Date', 'A']),
+    patient: findColumn(['Patient', 'Patient Name', 'Name', 'B']),
   };
 };
 
@@ -65,9 +61,14 @@ const isValidAppointmentRow = (
   const status = normalizeString(row[mapping.status]);
   const purpose = normalizeString(row[mapping.purpose]);
 
-  // Accept any row that has both status and purpose values
-  // Don't require keywords to match - let the dashboard filter handle that
-  return status.length > 0 && purpose.length > 0;
+  if (!status || !purpose) return false;
+
+  const hasStatus = 
+    status.includes(normalizeString(keywords.completed)) ||
+    status.includes(normalizeString(keywords.canceled)) ||
+    status.includes(normalizeString(keywords.noShow));
+
+  return hasStatus && purpose.length > 0;
 };
 
 export const parseExcelFile = async (
@@ -105,24 +106,12 @@ export const parseExcelFile = async (
         }
 
         if (headerRowIndex === -1) {
-          reject(new Error('Could not find header row in Excel file. Please ensure the file contains columns like Status, Purpose, Provider, Date, and Patient.'));
+          reject(new Error('Could not find header row in Excel file'));
           return;
         }
 
         const headers = jsonData[headerRowIndex].map((h: any) => h?.toString() || '');
         const dataRows = jsonData.slice(headerRowIndex + 1);
-
-        // Validate that essential columns exist
-        const hasStatus = headers.some(h => normalizeString(h).includes('status'));
-        const hasPurpose = headers.some(h => 
-          normalizeString(h).includes('purpose') || 
-          normalizeString(h).includes('type')
-        );
-        
-        if (!hasStatus || !hasPurpose) {
-          reject(new Error('Missing required columns. Excel file must contain Status and Purpose/Type columns.'));
-          return;
-        }
 
         // Convert to objects
         const rows: AppointmentRow[] = [];
