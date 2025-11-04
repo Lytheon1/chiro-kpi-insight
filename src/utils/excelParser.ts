@@ -65,14 +65,9 @@ const isValidAppointmentRow = (
   const status = normalizeString(row[mapping.status]);
   const purpose = normalizeString(row[mapping.purpose]);
 
-  if (!status || !purpose) return false;
-
-  const hasStatus = 
-    status.includes(normalizeString(keywords.completed)) ||
-    status.includes(normalizeString(keywords.canceled)) ||
-    status.includes(normalizeString(keywords.noShow));
-
-  return hasStatus && purpose.length > 0;
+  // Accept any row that has both status and purpose values
+  // Don't require keywords to match - let the dashboard filter handle that
+  return status.length > 0 && purpose.length > 0;
 };
 
 export const parseExcelFile = async (
