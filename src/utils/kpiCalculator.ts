@@ -28,20 +28,33 @@ export const isExcluded = (row: AppointmentRow, keywords: Keywords): boolean => 
     .map(k => normalizeString(k.trim()))
     .filter(k => k.length > 0);
   
-  return excludeList.some(keyword => {
-    // Remove all spaces and special characters for flexible matching
-    const flexibleKeyword = keyword.replace(/[\s:-]/g, '');
-    const flexiblePurpose = purpose.replace(/[\s:-]/g, '');
+  const isExcludedResult = excludeList.some(keyword => {
+    // Remove all spaces, colons, hyphens, and other separators for flexible matching
+    const flexibleKeyword = keyword.replace(/[\s:;\-_,]/g, '').toLowerCase();
+    const flexiblePurpose = purpose.replace(/[\s:;\-_,]/g, '').toLowerCase();
     
     // Check if keyword matches (with or without spaces/special chars)
-    if (flexiblePurpose.includes(flexibleKeyword)) return true;
+    if (flexiblePurpose.includes(flexibleKeyword)) {
+      console.log(`✓ Excluded: "${row.purpose}" matches keyword "${keyword}"`);
+      return true;
+    }
     
     // Special handling for phone-related keywords
-    if (keyword.includes('phone') && purpose.includes('phone')) return true;
+    if (keyword.includes('phone') && purpose.includes('phone')) {
+      console.log(`✓ Excluded: "${row.purpose}" contains "phone"`);
+      return true;
+    }
     
     // Original exact match as fallback
-    return purpose.includes(keyword);
+    if (purpose.includes(keyword)) {
+      console.log(`✓ Excluded: "${row.purpose}" exact match "${keyword}"`);
+      return true;
+    }
+    
+    return false;
   });
+  
+  return isExcludedResult;
 };
 
 export const isScheduled = (row: AppointmentRow, keywords: Keywords): boolean => {
