@@ -28,7 +28,20 @@ export const isExcluded = (row: AppointmentRow, keywords: Keywords): boolean => 
     .map(k => normalizeString(k.trim()))
     .filter(k => k.length > 0);
   
-  return excludeList.some(keyword => purpose.includes(keyword));
+  return excludeList.some(keyword => {
+    // Remove all spaces and special characters for flexible matching
+    const flexibleKeyword = keyword.replace(/[\s:-]/g, '');
+    const flexiblePurpose = purpose.replace(/[\s:-]/g, '');
+    
+    // Check if keyword matches (with or without spaces/special chars)
+    if (flexiblePurpose.includes(flexibleKeyword)) return true;
+    
+    // Special handling for phone-related keywords
+    if (keyword.includes('phone') && purpose.includes('phone')) return true;
+    
+    // Original exact match as fallback
+    return purpose.includes(keyword);
+  });
 };
 
 export const isScheduled = (row: AppointmentRow, keywords: Keywords): boolean => {
