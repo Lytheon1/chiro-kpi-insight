@@ -50,6 +50,15 @@ export const KeywordsConfig = ({ keywords, onKeywordsChange }: KeywordsConfigPro
           />
         </div>
         <div className="space-y-2">
+          <Label htmlFor="rescheduled-kw">Rescheduled Keyword</Label>
+          <Input
+            id="rescheduled-kw"
+            value={keywords.rescheduled}
+            onChange={(e) => handleChange('rescheduled', e.target.value)}
+            placeholder="rescheduled"
+          />
+        </div>
+        <div className="space-y-2">
           <Label htmlFor="rof-kw">ROF Keyword</Label>
           <Input
             id="rof-kw"

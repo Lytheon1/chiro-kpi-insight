@@ -17,6 +17,10 @@ export const isNoShow = (row: AppointmentRow, keywords: Keywords): boolean => {
   return (row._statusNormalized || '').includes(normalizeString(keywords.noShow));
 };
 
+export const isRescheduled = (row: AppointmentRow, keywords: Keywords): boolean => {
+  return (row._statusNormalized || '').includes(normalizeString(keywords.rescheduled));
+};
+
 export const isROF = (row: AppointmentRow, keywords: Keywords): boolean => {
   return (row._purposeNormalized || '').includes(normalizeString(keywords.rof));
 };

@@ -1,7 +1,7 @@
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { AppointmentRow, Keywords, ColumnMapping } from '@/types/dashboard';
 import { Badge } from '@/components/ui/badge';
-import { isCompleted, isCanceled, isNoShow } from '@/utils/kpiCalculator';
+import { isCompleted, isCanceled, isNoShow, isRescheduled } from '@/utils/kpiCalculator';
 import { useState } from 'react';
 import { AppointmentDetailsDialog } from './AppointmentDetailsDialog';
 
@@ -14,9 +14,11 @@ interface VisitTypeGroupsProps {
 interface TypeGroup {
   type: string;
   kept: number;
+  rescheduled: number;
   canceled: number;
   noShow: number;
   keptAppts: AppointmentRow[];
+  rescheduledAppts: AppointmentRow[];
   canceledAppts: AppointmentRow[];
   noShowAppts: AppointmentRow[];
 }
@@ -43,9 +45,11 @@ export const VisitTypeGroups = ({ rows, keywords, mapping }: VisitTypeGroupsProp
       groups.set(type, {
         type,
         kept: 0,
+        rescheduled: 0,
         canceled: 0,
         noShow: 0,
         keptAppts: [],
+        rescheduledAppts: [],
         canceledAppts: [],
         noShowAppts: [],
       });
@@ -56,6 +60,9 @@ export const VisitTypeGroups = ({ rows, keywords, mapping }: VisitTypeGroupsProp
     if (isCompleted(row, keywords)) {
       group.kept++;
       group.keptAppts.push(row);
+    } else if (isRescheduled(row, keywords)) {
+      group.rescheduled++;
+      group.rescheduledAppts.push(row);
     } else if (isCanceled(row, keywords)) {
       group.canceled++;
       group.canceledAppts.push(row);
@@ -66,12 +73,12 @@ export const VisitTypeGroups = ({ rows, keywords, mapping }: VisitTypeGroupsProp
   });
 
   const sortedGroups = Array.from(groups.values()).sort((a, b) => {
-    const aTotal = a.kept + a.canceled + a.noShow;
-    const bTotal = b.kept + b.canceled + b.noShow;
+    const aTotal = a.kept + a.rescheduled + a.canceled + a.noShow;
+    const bTotal = b.kept + b.rescheduled + b.canceled + b.noShow;
     return bTotal - aTotal;
   });
 
-  const handleGroupClick = (type: string, status: 'kept' | 'canceled' | 'noShow', appointments: AppointmentRow[]) => {
+  const handleGroupClick = (type: string, status: 'kept' | 'rescheduled' | 'canceled' | 'noShow', appointments: AppointmentRow[]) => {
     setDialogState({
       open: true,
       title: `${type} - ${status.charAt(0).toUpperCase() + status.slice(1)}`,
@@ -100,6 +107,15 @@ export const VisitTypeGroups = ({ rows, keywords, mapping }: VisitTypeGroupsProp
                       onClick={() => handleGroupClick(group.type, 'kept', group.keptAppts)}
                     >
                       Kept: {group.kept}
+                    </Badge>
+                  )}
+                  {group.rescheduled > 0 && (
+                    <Badge
+                      variant="outline"
+                      className="cursor-pointer border-warning bg-warning/10 text-warning hover:bg-warning/20"
+                      onClick={() => handleGroupClick(group.type, 'rescheduled', group.rescheduledAppts)}
+                    >
+                      Rescheduled: {group.rescheduled}
                     </Badge>
                   )}
                   {group.canceled > 0 && (

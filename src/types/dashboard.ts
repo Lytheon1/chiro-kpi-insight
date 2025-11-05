@@ -20,6 +20,7 @@ export interface Keywords {
   completed: string;
   canceled: string;
   noShow: string;
+  rescheduled: string;
   rof: string;
   excludeKeywords: string; // Comma-separated list of keywords to exclude from KPI calculations
 }

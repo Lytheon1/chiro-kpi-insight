@@ -22,6 +22,7 @@ const defaultKeywords: Keywords = {
   completed: 'checked',
   canceled: 'cancel',
   noShow: 'no show',
+  rescheduled: 'rescheduled',
   rof: 'ROF',
   excludeKeywords: 'massage, therapy: 50 min, therapy: 30min, phone call, complimentary 10-min phone call for potential new patients',
 };
