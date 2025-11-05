@@ -14,7 +14,7 @@ import { DataTable } from '@/components/DataTable';
 import { VisitTypeGroups } from '@/components/VisitTypeGroups';
 import { AppointmentDetailsDialog } from '@/components/AppointmentDetailsDialog';
 import { AppointmentRow, Goals, Keywords, ColumnMapping } from '@/types/dashboard';
-import { calculateKPIs, getKPIStatus, calculateWeeklyData, isROF, isCompleted, isMassage, isScheduled } from '@/utils/kpiCalculator';
+import { calculateKPIs, getKPIStatus, calculateWeeklyData, isROF, isCompleted, isExcluded, isScheduled } from '@/utils/kpiCalculator';
 import { exportToCSV, exportDashboardImage } from '@/utils/exportUtils';
 import { toast } from 'sonner';
 import { ArrowLeft, Download, FileImage, Loader2, ChevronDown } from 'lucide-react';
@@ -179,12 +179,12 @@ const Dashboard = () => {
 
   const getRetentionAppointments = (completedOnly: boolean = false) => {
     return filteredRows.filter(r => {
-      const nonMassage = !isMassage(r, keywords);
+      const nonExcluded = !isExcluded(r, keywords);
       const scheduledMatch = isScheduled(r, keywords);
       if (completedOnly) {
-        return nonMassage && isCompleted(r, keywords);
+        return nonExcluded && isCompleted(r, keywords);
       }
-      return nonMassage && scheduledMatch;
+      return nonExcluded && scheduledMatch;
     });
   };
 

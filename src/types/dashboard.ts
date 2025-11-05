@@ -21,7 +21,7 @@ export interface Keywords {
   canceled: string;
   noShow: string;
   rof: string;
-  massageExclude: string;
+  excludeKeywords: string; // Comma-separated list of keywords to exclude from KPI calculations
 }
 
 export interface Goals {

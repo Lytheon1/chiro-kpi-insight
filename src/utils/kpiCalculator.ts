@@ -21,8 +21,14 @@ export const isROF = (row: AppointmentRow, keywords: Keywords): boolean => {
   return (row._purposeNormalized || '').includes(normalizeString(keywords.rof));
 };
 
-export const isMassage = (row: AppointmentRow, keywords: Keywords): boolean => {
-  return (row._purposeNormalized || '').includes(normalizeString(keywords.massageExclude));
+export const isExcluded = (row: AppointmentRow, keywords: Keywords): boolean => {
+  const purpose = row._purposeNormalized || '';
+  const excludeList = keywords.excludeKeywords
+    .split(',')
+    .map(k => normalizeString(k.trim()))
+    .filter(k => k.length > 0);
+  
+  return excludeList.some(keyword => purpose.includes(keyword));
 };
 
 export const isScheduled = (row: AppointmentRow, keywords: Keywords): boolean => {
@@ -37,20 +43,20 @@ export const calculateKPIs = (
   const scheduledROF = rows.filter(r => isROF(r, keywords) && isScheduled(r, keywords)).length;
   const completedROF = rows.filter(r => isROF(r, keywords) && isCompleted(r, keywords)).length;
   
-  const scheduledNonMassage = rows.filter(r => !isMassage(r, keywords) && isScheduled(r, keywords)).length;
-  const completedNonMassage = rows.filter(r => !isMassage(r, keywords) && isCompleted(r, keywords)).length;
+  const scheduledNonExcluded = rows.filter(r => !isExcluded(r, keywords) && isScheduled(r, keywords)).length;
+  const completedNonExcluded = rows.filter(r => !isExcluded(r, keywords) && isCompleted(r, keywords)).length;
 
   const rofCompletionRate = scheduledROF > 0 ? (completedROF / scheduledROF) * 100 : 0;
-  const retentionRate = scheduledNonMassage > 0 ? (completedNonMassage / scheduledNonMassage) * 100 : 0;
-  const weeklyAverage = weeks > 0 ? completedNonMassage / weeks : 0;
+  const retentionRate = scheduledNonExcluded > 0 ? (completedNonExcluded / scheduledNonExcluded) * 100 : 0;
+  const weeklyAverage = weeks > 0 ? completedNonExcluded / weeks : 0;
 
   console.log('KPI Calculation Debug:', {
     totalRows: rows.length,
     weeks,
     scheduledROF,
     completedROF,
-    scheduledNonMassage,
-    completedNonMassage,
+    scheduledNonExcluded,
+    completedNonExcluded,
     weeklyAverage: weeklyAverage.toFixed(2),
   });
 
@@ -58,10 +64,10 @@ export const calculateKPIs = (
     scheduledROF,
     completedROF,
     rofCompletionRate,
-    scheduledNonMassage,
-    completedNonMassage,
+    scheduledNonMassage: scheduledNonExcluded,
+    completedNonMassage: completedNonExcluded,
     retentionRate,
-    totalKeptNonMassage: completedNonMassage,
+    totalKeptNonMassage: completedNonExcluded,
     weeklyAverage,
   };
 };
@@ -115,8 +121,8 @@ export const calculateWeeklyData = (
   const weeklyData: WeeklyData[] = [];
   
   weeklyMap.forEach((weekRows, weekStart) => {
-    const completedNonMassage = weekRows.filter(r => 
-      !isMassage(r, keywords) && isCompleted(r, keywords)
+    const completedNonExcluded = weekRows.filter(r => 
+      !isExcluded(r, keywords) && isCompleted(r, keywords)
     ).length;
 
     const scheduledROF = weekRows.filter(r => 
@@ -126,18 +132,18 @@ export const calculateWeeklyData = (
       isROF(r, keywords) && isCompleted(r, keywords)
     ).length;
 
-    const scheduledNonMassage = weekRows.filter(r => 
-      !isMassage(r, keywords) && isScheduled(r, keywords)
+    const scheduledNonExcluded = weekRows.filter(r => 
+      !isExcluded(r, keywords) && isScheduled(r, keywords)
     ).length;
-    const completedNonMassageForRate = weekRows.filter(r => 
-      !isMassage(r, keywords) && isCompleted(r, keywords)
+    const completedNonExcludedForRate = weekRows.filter(r => 
+      !isExcluded(r, keywords) && isCompleted(r, keywords)
     ).length;
 
     weeklyData.push({
       weekStart,
-      keptAppointments: completedNonMassage,
+      keptAppointments: completedNonExcluded,
       rofCompletionRate: scheduledROF > 0 ? (completedROF / scheduledROF) * 100 : 0,
-      retentionRate: scheduledNonMassage > 0 ? (completedNonMassageForRate / scheduledNonMassage) * 100 : 0,
+      retentionRate: scheduledNonExcluded > 0 ? (completedNonExcludedForRate / scheduledNonExcluded) * 100 : 0,
     });
   });
 

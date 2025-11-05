@@ -23,7 +23,7 @@ const defaultKeywords: Keywords = {
   canceled: 'cancel',
   noShow: 'no show',
   rof: 'ROF',
-  massageExclude: 'Massage',
+  excludeKeywords: 'massage, therapy: 50 min, phone call',
 };
 
 const Upload = () => {

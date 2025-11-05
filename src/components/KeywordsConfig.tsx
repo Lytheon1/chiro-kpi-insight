@@ -59,13 +59,16 @@ export const KeywordsConfig = ({ keywords, onKeywordsChange }: KeywordsConfigPro
           />
         </div>
         <div className="space-y-2 sm:col-span-2">
-          <Label htmlFor="massage-kw">Massage Exclude Keyword</Label>
+          <Label htmlFor="exclude-kw">Exclude Keywords (comma-separated)</Label>
           <Input
-            id="massage-kw"
-            value={keywords.massageExclude}
-            onChange={(e) => handleChange('massageExclude', e.target.value)}
-            placeholder="Massage"
+            id="exclude-kw"
+            value={keywords.excludeKeywords}
+            onChange={(e) => handleChange('excludeKeywords', e.target.value)}
+            placeholder="massage, therapy: 50 min, phone call"
           />
+          <p className="text-xs text-muted-foreground">
+            These appointment types will be excluded from Retention Rate, Total Kept, and Weekly Average calculations, but will still appear in Visit Type Breakdown.
+          </p>
         </div>
       </CardContent>
     </Card>
