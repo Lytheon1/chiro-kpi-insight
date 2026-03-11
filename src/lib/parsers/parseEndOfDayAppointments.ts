@@ -4,6 +4,7 @@ import type { EndOfDayAppointmentRow, EndOfDayDailyTotals, ParsedEndOfDay } from
 
 /**
  * Parses ChiroTouch "End-of-Day Report - Appointments" export.
+ * Now captures patientName from col[0] on appointment rows.
  */
 export function parseEndOfDayAppointments(file: File): Promise<ParsedEndOfDay> {
   return new Promise((resolve, reject) => {
@@ -15,7 +16,6 @@ export function parseEndOfDayAppointments(file: File): Promise<ParsedEndOfDay> {
         const ws = wb.Sheets[wb.SheetNames[0]];
         const rows: unknown[][] = XLSX.utils.sheet_to_json(ws, { header: 1, defval: "" });
 
-        // Validate report type
         const titleCell = normalizeText(rows[0]?.[0]);
         if (!titleCell.includes("end-of-day report")) {
           throw new Error(
@@ -37,7 +37,6 @@ export function parseEndOfDayAppointments(file: File): Promise<ParsedEndOfDay> {
           const row = rows[i];
           const col0 = normalizeText(row[0]);
 
-          // ── Day block start
           if (col0 === "appointments for") {
             if (currentTotals && currentDate) {
               dailyTotals.push(currentTotals as EndOfDayDailyTotals);
@@ -50,7 +49,6 @@ export function parseEndOfDayAppointments(file: File): Promise<ParsedEndOfDay> {
             continue;
           }
 
-          // ── Totals block start
           if (col0 === "totals for") {
             inTotalsBlock = true;
             const totDate = normalizeDate(row[1]) ?? currentDate ?? "";
@@ -65,10 +63,8 @@ export function parseEndOfDayAppointments(file: File): Promise<ParsedEndOfDay> {
             continue;
           }
 
-          // ── Summary label rows (inside totals block)
           if (inTotalsBlock && currentTotals) {
             parseSummaryRow(row, currentTotals);
-
             if (col0 === "total appointments:") {
               dailyTotals.push(currentTotals as EndOfDayDailyTotals);
               currentTotals = null;
@@ -77,7 +73,6 @@ export function parseEndOfDayAppointments(file: File): Promise<ParsedEndOfDay> {
             continue;
           }
 
-          // ── Appointment data rows
           if (
             !inTotalsBlock &&
             currentDate &&
@@ -88,6 +83,12 @@ export function parseEndOfDayAppointments(file: File): Promise<ParsedEndOfDay> {
             const purpose = String(row[10] || "").trim();
 
             if (status && purpose && status !== "status") {
+              // Capture patient name from col[0] — may be blank if PHI removed
+              const rawName = String(row[0] || "").trim();
+              const patientName = rawName && !normalizeText(rawName).includes("appointments")
+                ? rawName
+                : undefined;
+
               appointments.push({
                 source: "endOfDay",
                 date: currentDate,
@@ -98,12 +99,12 @@ export function parseEndOfDayAppointments(file: File): Promise<ParsedEndOfDay> {
                 purposeRaw: purpose,
                 checkInRaw: normalizeTime(row[7]) ?? undefined,
                 postedChargesRaw: row[12] !== "" ? row[12] as string | number : undefined,
+                patientName,
               });
             }
           }
         }
 
-        // Flush any remaining totals
         if (currentTotals && (currentTotals as EndOfDayDailyTotals).date) {
           dailyTotals.push(currentTotals as EndOfDayDailyTotals);
         }
