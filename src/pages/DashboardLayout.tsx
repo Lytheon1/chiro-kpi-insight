@@ -6,17 +6,17 @@ import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Badge } from '@/components/ui/badge';
 import { KeywordsConfig } from '@/components/dashboard/KeywordsConfigPanel';
-import { ArrowLeft, Settings } from 'lucide-react';
+import { ArrowLeft, Settings, FileCheck } from 'lucide-react';
 import { useState, useEffect } from 'react';
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
 
 const navItems = [
-  { to: '/summary', label: 'Summary' },
-  { to: '/patients', label: 'Patients' },
-  { to: '/providers', label: 'Providers' },
-  { to: '/trends', label: 'Trends' },
-  { to: '/diagnostics', label: 'Diagnostics' },
+  { to: '/executive-brief', label: 'Executive Brief' },
+  { to: '/analysis', label: 'Operational Analysis' },
+  { to: '/patients', label: 'Patient Review' },
+  { to: '/validation', label: 'Validation' },
+  { to: '/evidence', label: 'Evidence' },
 ];
 
 export default function DashboardLayout() {
@@ -29,7 +29,6 @@ export default function DashboardLayout() {
   } = ctx;
   const [settingsOpen, setSettingsOpen] = useState(false);
 
-  // Load data from session storage if not loaded yet
   useEffect(() => {
     if (!isLoaded) {
       try {
@@ -50,25 +49,25 @@ export default function DashboardLayout() {
 
   return (
     <div className="min-h-screen bg-background">
-      {/* Top Nav */}
       <header className="border-b bg-card sticky top-0 z-30">
         <div className="container mx-auto px-4 max-w-[1600px]">
-          <div className="flex items-center justify-between h-14">
-            <div className="flex items-center gap-4">
-              <h1 className="text-lg font-bold hidden sm:block">CTC KPI Dashboard</h1>
+          <div className="flex items-center justify-between h-12">
+            <div className="flex items-center gap-3">
+              <h1 className="text-sm font-bold tracking-tight hidden sm:block">CTC KPI</h1>
               {isLoaded && (
-                <Badge variant="outline" className="text-[10px] bg-success/10 text-success border-success/30">
+                <Badge variant="outline" className="text-[9px] bg-success/10 text-success border-success/30 gap-1">
+                  <FileCheck className="h-2.5 w-2.5" />
                   Data Loaded
                 </Badge>
               )}
             </div>
-            <nav className="flex items-center gap-1">
+            <nav className="flex items-center gap-0.5">
               {navItems.map(item => (
                 <NavLink
                   key={item.to}
                   to={item.to}
                   className={({ isActive }) => cn(
-                    'px-3 py-1.5 text-sm rounded-md transition-colors',
+                    'px-2.5 py-1 text-xs font-medium rounded transition-colors',
                     isActive
                       ? 'bg-primary text-primary-foreground'
                       : 'text-muted-foreground hover:text-foreground hover:bg-muted'
@@ -78,12 +77,12 @@ export default function DashboardLayout() {
                 </NavLink>
               ))}
             </nav>
-            <div className="flex gap-2">
-              <Button variant="ghost" size="sm" onClick={() => setSettingsOpen(!settingsOpen)}>
-                <Settings className="h-4 w-4" />
+            <div className="flex gap-1.5">
+              <Button variant="ghost" size="sm" className="h-7 w-7 p-0" onClick={() => setSettingsOpen(!settingsOpen)}>
+                <Settings className="h-3.5 w-3.5" />
               </Button>
-              <Button variant="ghost" size="sm" onClick={() => navigate('/')}>
-                <ArrowLeft className="h-4 w-4" />
+              <Button variant="ghost" size="sm" className="h-7 w-7 p-0" onClick={() => navigate('/')}>
+                <ArrowLeft className="h-3.5 w-3.5" />
               </Button>
             </div>
           </div>
@@ -91,21 +90,19 @@ export default function DashboardLayout() {
       </header>
 
       <div className="container mx-auto px-4 py-6 max-w-[1600px]">
-        {/* Date range info */}
         {endOfDay?.minDate && endOfDay?.maxDate && (
-          <p className="text-sm text-muted-foreground mb-4">
-            {endOfDay.minDate} — {endOfDay.maxDate}
+          <p className="text-xs text-muted-foreground mb-4 font-mono">
+            Report Period: {endOfDay.minDate} — {endOfDay.maxDate}
           </p>
         )}
 
-        {/* Settings Panel */}
         {settingsOpen && (
           <div className="space-y-4 mb-6">
             <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-6 p-4 rounded-lg border bg-card">
               <div className="space-y-2">
-                <Label>Provider</Label>
+                <Label className="text-xs">Provider</Label>
                 <Select value={selectedProvider} onValueChange={setSelectedProvider}>
-                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectTrigger className="h-8 text-xs"><SelectValue /></SelectTrigger>
                   <SelectContent>
                     <SelectItem value="All">All Providers</SelectItem>
                     {allProviders.map(p => <SelectItem key={p} value={p}>{p}</SelectItem>)}
@@ -113,28 +110,28 @@ export default function DashboardLayout() {
                 </Select>
               </div>
               <div className="space-y-2">
-                <Label>Weeks Override</Label>
-                <Input type="number" placeholder={calculatedWeeks.toString()} value={weeksOverride}
+                <Label className="text-xs">Weeks Override</Label>
+                <Input className="h-8 text-xs" type="number" placeholder={calculatedWeeks.toString()} value={weeksOverride}
                   onChange={e => setWeeksOverride(e.target.value)} min="1" />
               </div>
               <div className="space-y-2">
-                <Label>ROF Goal (%)</Label>
-                <Input type="number" value={goals.rofRate}
+                <Label className="text-xs">ROF Goal (%)</Label>
+                <Input className="h-8 text-xs" type="number" value={goals.rofRate}
                   onChange={e => setGoals({ ...goals, rofRate: parseFloat(e.target.value) || 0 })} />
               </div>
               <div className="space-y-2">
-                <Label>Retention Goal (%)</Label>
-                <Input type="number" value={goals.retentionRate}
+                <Label className="text-xs">Retention Goal (%)</Label>
+                <Input className="h-8 text-xs" type="number" value={goals.retentionRate}
                   onChange={e => setGoals({ ...goals, retentionRate: parseFloat(e.target.value) || 0 })} />
               </div>
               <div className="space-y-2">
-                <Label>Quarterly Target</Label>
-                <Input type="number" value={goals.quarterlyKept}
+                <Label className="text-xs">Quarterly Target</Label>
+                <Input className="h-8 text-xs" type="number" value={goals.quarterlyKept}
                   onChange={e => setGoals({ ...goals, quarterlyKept: parseInt(e.target.value) || 0 })} />
               </div>
               <div className="space-y-2">
-                <Label>Weekly Target</Label>
-                <Input type="number" value={goals.weeklyKept}
+                <Label className="text-xs">Weekly Target</Label>
+                <Input className="h-8 text-xs" type="number" value={goals.weeklyKept}
                   onChange={e => setGoals({ ...goals, weeklyKept: parseInt(e.target.value) || 0 })} />
               </div>
             </div>
@@ -142,13 +139,12 @@ export default function DashboardLayout() {
           </div>
         )}
 
-        {/* Provider filter (always visible when settings closed) */}
         {!settingsOpen && isLoaded && (
           <div className="flex gap-4 items-end mb-6">
-            <div className="space-y-2">
-              <Label>Provider</Label>
+            <div className="space-y-1">
+              <Label className="text-xs">Provider</Label>
               <Select value={selectedProvider} onValueChange={setSelectedProvider}>
-                <SelectTrigger className="w-[220px]"><SelectValue /></SelectTrigger>
+                <SelectTrigger className="w-[200px] h-8 text-xs"><SelectValue /></SelectTrigger>
                 <SelectContent>
                   <SelectItem value="All">All Providers</SelectItem>
                   {allProviders.map(p => <SelectItem key={p} value={p}>{p}</SelectItem>)}
