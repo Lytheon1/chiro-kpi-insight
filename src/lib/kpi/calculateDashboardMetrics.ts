@@ -29,7 +29,8 @@ export const DEFAULT_FILTERS: DashboardFilters = {
   ltcKeywords: ["ltc: chiropractic", "ltc"],
   excludedPurposeKeywords: ["10-min phone", "complimentary 10-min"],
   tractionKeywords: ["spinal decompression", "traction"],
-  therapyKeywords: ["therapy"],
+  // Therapy keywords intentionally empty — "therapy" is in massageKeywords
+  therapyKeywords: [],
 };
 
 export function calculateDashboardMetrics(
