@@ -1,13 +1,12 @@
-import { NavLink, useLocation } from 'react-router-dom';
+import { NavLink } from 'react-router-dom';
 import {
   Sidebar, SidebarContent, SidebarGroup, SidebarGroupContent, SidebarGroupLabel,
   SidebarMenu, SidebarMenuButton, SidebarMenuItem, SidebarHeader, SidebarFooter,
   useSidebar,
 } from '@/components/ui/sidebar';
-import { Badge } from '@/components/ui/badge';
 import { useDashboard } from '@/lib/context/DashboardContext';
 import {
-  Upload, FileText, Users, AlertTriangle, BarChart3, Shield, Database, Settings,
+  Upload, FileText, Users, AlertTriangle, BarChart3, Shield, Database,
   Activity,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
@@ -26,46 +25,44 @@ const navItems = [
 export function AppSidebar() {
   const { state } = useSidebar();
   const collapsed = state === 'collapsed';
-  const location = useLocation();
   const { isLoaded, allProviders, endOfDay } = useDashboard();
 
   const singleProvider = allProviders.length <= 1;
 
   return (
-    <Sidebar collapsible="icon" className="border-r">
-      <SidebarHeader className="px-3 py-3">
-        {!collapsed && (
+    <Sidebar collapsible="icon" className="border-r-0">
+      <SidebarHeader className="px-4 py-5 border-b border-sidebar-border">
+        {!collapsed ? (
           <div>
-            <h1 className="text-sm font-bold tracking-tight text-sidebar-foreground">CTC KPI</h1>
-            {isLoaded && singleProvider && allProviders[0] && (
-              <p className="text-[10px] text-sidebar-foreground/60 mt-0.5 truncate">{allProviders[0]}</p>
+            <h1 className="font-display text-[15px] leading-tight text-sidebar-foreground">
+              Lakeside Spine<br />& Wellness
+            </h1>
+            <p className="text-[11px] text-sidebar-foreground/45 mt-0.5 font-light">
+              Operational Intelligence
+            </p>
+            {isLoaded && (
+              <div className="flex items-center gap-1.5 mt-2 text-[10px] text-sidebar-foreground/60 font-medium uppercase tracking-wide">
+                <span className="w-1.5 h-1.5 rounded-full bg-success shadow-[0_0_4px] shadow-success inline-block" />
+                {endOfDay?.minDate && endOfDay?.maxDate
+                  ? `${endOfDay.minDate.slice(0, 7)} · Reports Loaded`
+                  : 'Reports Loaded'}
+              </div>
+            )}
+            {!isLoaded && (
+              <div className="flex items-center gap-1.5 mt-2 text-[10px] text-sidebar-foreground/60 font-medium uppercase tracking-wide">
+                <span className="w-1.5 h-1.5 rounded-full bg-warning shadow-[0_0_4px] shadow-warning inline-block" />
+                Upload Required
+              </div>
             )}
           </div>
+        ) : (
+          <h1 className="text-xs font-bold text-center text-sidebar-foreground">LS</h1>
         )}
-        {collapsed && <h1 className="text-xs font-bold text-center text-sidebar-foreground">CTC</h1>}
       </SidebarHeader>
 
       <SidebarContent>
-        {/* Status Indicator */}
-        {!collapsed && (
-          <div className="px-3 mb-2">
-            {isLoaded ? (
-              <Badge variant="outline" className="text-[9px] bg-success/10 text-success border-success/30 w-full justify-center gap-1">
-                <span className="w-1.5 h-1.5 rounded-full bg-success inline-block" />
-                Reports Loaded
-              </Badge>
-            ) : (
-              <Badge variant="outline" className="text-[9px] bg-warning/10 text-warning border-warning/30 w-full justify-center gap-1">
-                <span className="w-1.5 h-1.5 rounded-full bg-warning inline-block" />
-                Upload Required
-              </Badge>
-            )}
-          </div>
-        )}
-
-        {/* Main Navigation */}
+        {/* Main */}
         <SidebarGroup>
-          {!collapsed && <SidebarGroupLabel className="text-[9px] uppercase tracking-wider">Navigation</SidebarGroupLabel>}
           <SidebarGroupContent>
             <SidebarMenu>
               {navItems.filter(i => i.group === 'main').map(item => (
@@ -75,13 +72,13 @@ export function AppSidebar() {
                       to={item.to}
                       end
                       className={({ isActive }) => cn(
-                        'flex items-center gap-2 px-2 py-1.5 rounded-md text-xs transition-colors',
+                        'flex items-center gap-2.5 px-2.5 py-2 rounded-md text-[13px] transition-all',
                         isActive
-                          ? 'bg-sidebar-accent text-sidebar-accent-foreground font-medium'
-                          : 'text-sidebar-foreground/70 hover:bg-sidebar-accent/50 hover:text-sidebar-foreground'
+                          ? 'bg-sidebar-accent text-sidebar-foreground font-medium'
+                          : 'text-sidebar-foreground/60 hover:bg-sidebar-accent/50 hover:text-sidebar-foreground/90'
                       )}
                     >
-                      <item.icon className="h-4 w-4 shrink-0" />
+                      <item.icon className="h-[15px] w-[15px] shrink-0 opacity-80" />
                       {!collapsed && <span>{item.label}</span>}
                     </NavLink>
                   </SidebarMenuButton>
@@ -91,9 +88,15 @@ export function AppSidebar() {
           </SidebarGroupContent>
         </SidebarGroup>
 
-        {/* Analysis Pages */}
+        <div className="mx-2.5 h-px bg-sidebar-border" />
+
+        {/* Analysis */}
         <SidebarGroup>
-          {!collapsed && <SidebarGroupLabel className="text-[9px] uppercase tracking-wider">Analysis</SidebarGroupLabel>}
+          {!collapsed && (
+            <SidebarGroupLabel className="text-[9px] font-semibold uppercase tracking-widest text-sidebar-foreground/30 px-2.5">
+              Analytics
+            </SidebarGroupLabel>
+          )}
           <SidebarGroupContent>
             <SidebarMenu>
               {navItems.filter(i => i.group === 'analysis').map(item => (
@@ -102,13 +105,13 @@ export function AppSidebar() {
                     <NavLink
                       to={item.to}
                       className={({ isActive }) => cn(
-                        'flex items-center gap-2 px-2 py-1.5 rounded-md text-xs transition-colors',
+                        'flex items-center gap-2.5 px-2.5 py-2 rounded-md text-[13px] transition-all',
                         isActive
-                          ? 'bg-sidebar-accent text-sidebar-accent-foreground font-medium'
-                          : 'text-sidebar-foreground/70 hover:bg-sidebar-accent/50 hover:text-sidebar-foreground'
+                          ? 'bg-sidebar-accent text-sidebar-foreground font-medium'
+                          : 'text-sidebar-foreground/60 hover:bg-sidebar-accent/50 hover:text-sidebar-foreground/90'
                       )}
                     >
-                      <item.icon className="h-4 w-4 shrink-0" />
+                      <item.icon className="h-[15px] w-[15px] shrink-0 opacity-80" />
                       {!collapsed && <span>{item.label}</span>}
                     </NavLink>
                   </SidebarMenuButton>
@@ -118,9 +121,15 @@ export function AppSidebar() {
           </SidebarGroupContent>
         </SidebarGroup>
 
+        <div className="mx-2.5 h-px bg-sidebar-border" />
+
         {/* Data */}
         <SidebarGroup>
-          {!collapsed && <SidebarGroupLabel className="text-[9px] uppercase tracking-wider">Data</SidebarGroupLabel>}
+          {!collapsed && (
+            <SidebarGroupLabel className="text-[9px] font-semibold uppercase tracking-widest text-sidebar-foreground/30 px-2.5">
+              Data
+            </SidebarGroupLabel>
+          )}
           <SidebarGroupContent>
             <SidebarMenu>
               {navItems.filter(i => i.group === 'data').map(item => (
@@ -129,13 +138,13 @@ export function AppSidebar() {
                     <NavLink
                       to={item.to}
                       className={({ isActive }) => cn(
-                        'flex items-center gap-2 px-2 py-1.5 rounded-md text-xs transition-colors',
+                        'flex items-center gap-2.5 px-2.5 py-2 rounded-md text-[13px] transition-all',
                         isActive
-                          ? 'bg-sidebar-accent text-sidebar-accent-foreground font-medium'
-                          : 'text-sidebar-foreground/70 hover:bg-sidebar-accent/50 hover:text-sidebar-foreground'
+                          ? 'bg-sidebar-accent text-sidebar-foreground font-medium'
+                          : 'text-sidebar-foreground/60 hover:bg-sidebar-accent/50 hover:text-sidebar-foreground/90'
                       )}
                     >
-                      <item.icon className="h-4 w-4 shrink-0" />
+                      <item.icon className="h-[15px] w-[15px] shrink-0 opacity-80" />
                       {!collapsed && <span>{item.label}</span>}
                     </NavLink>
                   </SidebarMenuButton>
@@ -146,10 +155,13 @@ export function AppSidebar() {
         </SidebarGroup>
       </SidebarContent>
 
-      <SidebarFooter className="px-3 py-2">
+      <SidebarFooter className="px-3 py-3">
         {!collapsed && isLoaded && endOfDay?.minDate && endOfDay?.maxDate && (
-          <div className="text-[9px] text-sidebar-foreground/50 space-y-0.5">
+          <div className="text-[9px] text-sidebar-foreground/40 space-y-0.5">
             <div>{endOfDay.minDate} — {endOfDay.maxDate}</div>
+            {singleProvider && allProviders[0] && (
+              <div>{allProviders[0]}</div>
+            )}
           </div>
         )}
       </SidebarFooter>

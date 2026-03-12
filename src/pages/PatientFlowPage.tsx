@@ -1,39 +1,20 @@
 /**
- * Patient Flow page — full funnel visualization + detailed stage data.
- * Uses UNIQUE PATIENT COUNTS, not visit row counts.
+ * Patient Flow page — funnel + three-metric retention framework.
+ * Restyled to match consulting-grade reference design.
  */
 import { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
 import { useDashboard } from '@/lib/context/DashboardContext';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
-import { Info, ArrowRight, ChevronDown, ChevronUp } from 'lucide-react';
-import {
-  FunnelChart, Funnel, LabelList, Cell,
-  Tooltip as RechartsTooltip, ResponsiveContainer,
-} from 'recharts';
-import type { FunnelPatient } from '@/lib/kpi/patientFunnel';
+import { Info, ChevronDown, ChevronUp } from 'lucide-react';
+import { STATUS_BG, STATUS_LABELS, BENCHMARKS, getBenchmarkStatus } from '@/lib/kpi/benchmarks';
 
-const FUNNEL_COLORS = [
-  'hsl(220, 40%, 22%)',
-  'hsl(220, 35%, 32%)',
-  'hsl(220, 30%, 42%)',
-  'hsl(220, 25%, 55%)',
-  'hsl(220, 20%, 68%)',
-];
-
-const tooltipStyle = {
-  backgroundColor: 'hsl(var(--card))',
-  border: '1px solid hsl(var(--border))',
-  borderRadius: '6px',
-  fontSize: '11px',
-};
+const FUNNEL_BAR_COLORS = ['hsl(213, 63%, 40%)', 'hsl(190, 80%, 35%)', 'hsl(160, 60%, 35%)', 'hsl(270, 50%, 45%)', 'hsl(30, 80%, 35%)'];
 
 export default function PatientFlowPage() {
-  const { patientFunnel, sequenceAnalysis, metrics, carePathAnalysis } = useDashboard();
-  const navigate = useNavigate();
+  const { patientFunnel, metrics } = useDashboard();
   const [expandedStage, setExpandedStage] = useState<string | null>(null);
 
   if (!patientFunnel || !metrics) {
@@ -46,128 +27,157 @@ export default function PatientFlowPage() {
     );
   }
 
-  const funnelData = patientFunnel.stages
-    .filter(s => s.count > 0 || s.label === 'New Patients')
-    .map((s, i) => ({
-      name: s.label,
-      value: s.count,
-      fill: FUNNEL_COLORS[i] || FUNNEL_COLORS[FUNNEL_COLORS.length - 1],
-      conversionRate: s.conversionRate,
-      dropOff: s.dropOff,
-      dropOffLabel: s.dropOffLabel,
-    }));
+  const max = patientFunnel.stages[0]?.count || 1;
 
-  // Find worst drop-off stage
-  const worstDropIdx = patientFunnel.stages.reduce((maxIdx, s, i, arr) => {
-    if (i === 0) return maxIdx;
-    const rate = s.conversionRate ?? 1;
-    const maxRate = arr[maxIdx]?.conversionRate ?? 1;
-    return rate < maxRate ? i : maxIdx;
-  }, 1);
+  const schedReliability = metrics.totalScheduled > 0 ? (metrics.totalCompleted / metrics.totalScheduled * 100) : 0;
+  const treatmentFollowThrough = patientFunnel.rofPatientCount > 0 ? (patientFunnel.txStartedCount / patientFunnel.rofPatientCount * 100) : 0;
+  const careContinuation = patientFunnel.txStartedCount > 0 ? (patientFunnel.activeCareCount / patientFunnel.txStartedCount * 100) : 0;
 
-  const toggleStage = (label: string) => {
-    setExpandedStage(expandedStage === label ? null : label);
+  const retentionMetrics = [
+    {
+      label: 'Schedule Reliability',
+      value: schedReliability,
+      sub: `${metrics.totalCompleted} / ${metrics.totalScheduled} visits`,
+      type: 'visit-based',
+      meaning: 'How well the appointment schedule holds. Completed ÷ Scheduled visits.',
+      benchmarkKey: 'scheduleReliability' as const,
+    },
+    {
+      label: 'Treatment Follow-Through',
+      value: treatmentFollowThrough,
+      sub: `${patientFunnel.txStartedCount} / ${patientFunnel.rofPatientCount} patients`,
+      type: 'patient-based',
+      meaning: `Patients who began treatment after ROF. ${patientFunnel.txStartedCount} of ${patientFunnel.rofPatientCount} ROF patients started care.`,
+      benchmarkKey: 'treatmentFollowThrough' as const,
+    },
+    {
+      label: 'Care Continuation',
+      value: careContinuation,
+      sub: `${patientFunnel.activeCareCount} / ${patientFunnel.txStartedCount} patients`,
+      type: 'patient-based',
+      meaning: `Patients who reached 3+ treatment visits after starting. ${patientFunnel.activeCareCount} of ${patientFunnel.txStartedCount} starters.`,
+      benchmarkKey: 'careContinuation' as const,
+    },
+  ];
+
+  const benchmarkMap: Record<string, { excellent: number; healthy: number; watch: number }> = {
+    scheduleReliability: { excellent: 90, healthy: 82, watch: 75 },
+    treatmentFollowThrough: { excellent: 90, healthy: 82, watch: 70 },
+    careContinuation: { excellent: 85, healthy: 70, watch: 55 },
   };
+
+  function getStatus(value: number, key: string) {
+    const t = benchmarkMap[key];
+    if (!t) return 'watch' as const;
+    if (value >= t.excellent) return 'excellent' as const;
+    if (value >= t.healthy) return 'healthy' as const;
+    if (value >= t.watch) return 'watch' as const;
+    return 'risk' as const;
+  }
+
+  function getBarColor(status: string) {
+    return status === 'excellent' ? 'hsl(var(--success))' :
+           status === 'healthy' ? 'hsl(152 48% 42%)' :
+           status === 'watch' ? 'hsl(var(--warning))' :
+           'hsl(var(--destructive))';
+  }
 
   return (
     <div className="space-y-6">
-      <div className="space-y-1">
-        <h2 className="text-xl font-bold tracking-tight">Patient Flow</h2>
-        <p className="text-xs text-muted-foreground">
-          Care progression funnel based on <strong>unique patients</strong>, not visit counts.
-        </p>
+      {/* Retention Trio */}
+      <div>
+        <div className="text-[9px] font-bold tracking-widest uppercase text-faint mb-3">Three-Metric Retention Framework</div>
+        <div className="grid gap-4 md:grid-cols-3">
+          {retentionMetrics.map(m => {
+            const status = getStatus(m.value, m.benchmarkKey);
+            const color = getBarColor(status);
+            const isWeak = m.value < 60;
+            return (
+              <div key={m.label} className={`bg-card border rounded-lg p-5 text-center shadow-sm ${isWeak ? 'border-warning/50' : ''}`}>
+                <div className="retention-value" style={isWeak ? { color: 'hsl(var(--warning))' } : {}}>
+                  {m.value.toFixed(1)}%
+                </div>
+                <div className="text-[12px] font-semibold text-primary mt-1">{m.label}</div>
+                <div className="text-[10px] text-faint italic mb-2">{m.type}</div>
+                <div className="text-[11px] text-muted-foreground leading-snug">{m.meaning}</div>
+                <div className="mt-3 flex justify-center">
+                  <Badge variant="outline" className={`text-[10px] ${STATUS_BG[status]}`}>
+                    <span className="w-1 h-1 rounded-full inline-block mr-1" style={{ background: color }} />
+                    {STATUS_LABELS[status]}
+                  </Badge>
+                </div>
+                <div className="mt-2 benchmark-bar-track">
+                  <div className="h-full rounded-full" style={{ width: `${Math.min(100, m.value)}%`, background: color }} />
+                </div>
+              </div>
+            );
+          })}
+        </div>
       </div>
 
-      {/* Funnel Chart */}
+      {/* Insight */}
+      {careContinuation < 65 && (
+        <div className="insight-block insight-block-medium">
+          <Badge variant="outline" className="text-[10px] mb-1.5 bg-warning/10 text-warning border-warning/30">○ Review</Badge>
+          <div className="text-[13px] font-semibold text-primary">
+            Care continuation ({careContinuation.toFixed(0)}%) is the weakest retention metric — {patientFunnel.txStartedCount - patientFunnel.activeCareCount} patients started but did not establish regular care
+          </div>
+          <div className="text-[12px] text-muted-foreground mt-2">
+            High Treatment Follow-Through ({treatmentFollowThrough.toFixed(0)}%) combined with low Care Continuation suggests patients accept the care plan initially but taper off before establishing a regular cadence.
+          </div>
+        </div>
+      )}
+
+      {/* Funnel */}
       <Card>
         <CardHeader className="pb-2">
-          <CardTitle className="text-sm font-semibold flex items-center gap-2">
-            Patient Care Funnel
-            <Tooltip>
-              <TooltipTrigger><Info className="h-3.5 w-3.5 text-muted-foreground" /></TooltipTrigger>
-              <TooltipContent className="max-w-xs text-xs">
-                Stage counts reflect unique patients who completed each care stage.
-                Total visit counts are shown separately in schedule metrics.
-              </TooltipContent>
-            </Tooltip>
-          </CardTitle>
+          <div className="flex items-center justify-between">
+            <CardTitle className="text-[13px] font-semibold text-primary flex items-center gap-2">
+              Patient Care Funnel
+              <Tooltip>
+                <TooltipTrigger><Info className="h-3.5 w-3.5 text-faint" /></TooltipTrigger>
+                <TooltipContent className="max-w-xs text-xs">
+                  Stage counts reflect unique patients who completed each care stage.
+                </TooltipContent>
+              </Tooltip>
+            </CardTitle>
+            <span className="evidence-label">EVIDENCE</span>
+          </div>
         </CardHeader>
         <CardContent>
-          <ResponsiveContainer width="100%" height={260}>
-            <FunnelChart>
-              <RechartsTooltip
-                contentStyle={tooltipStyle}
-                formatter={(value: number, name: string, entry: any) => {
-                  const d = entry.payload;
-                  const parts = [`${value} patients`];
-                  if (d.conversionRate !== null && d.conversionRate !== undefined) {
-                    parts.push(`${(d.conversionRate * 100).toFixed(0)}% conversion`);
-                  }
-                  if (d.dropOff > 0) parts.push(`${d.dropOff} dropped`);
-                  return parts.join(' | ');
-                }}
-              />
-              <Funnel dataKey="value" data={funnelData} isAnimationActive>
-                <LabelList position="center" fill="white" fontSize={12} formatter={(v: number) => v} />
-                <LabelList position="right" fill="hsl(var(--muted-foreground))" fontSize={10} dataKey="name" />
-                {funnelData.map((entry, i) => (
-                  <Cell key={i} fill={entry.fill} />
-                ))}
-              </Funnel>
-            </FunnelChart>
-          </ResponsiveContainer>
-
-          <div className="text-[10px] text-muted-foreground mt-3 p-2.5 rounded bg-muted/50 border">
-            Stage counts reflect unique patients who completed each care stage.
-            Total visit counts are shown separately in schedule metrics.
+          <div className="space-y-1">
+            {patientFunnel.stages.map((s, i) => (
+              <div
+                key={s.label}
+                className="flex items-center gap-3 py-2.5 px-3 rounded cursor-pointer hover:bg-accent/30 transition-colors"
+                onClick={() => setExpandedStage(expandedStage === s.label ? null : s.label)}
+              >
+                <div className="flex-1">
+                  <div className="text-[12px] font-medium text-primary mb-1">{s.label}</div>
+                  <div className="funnel-bar-track">
+                    <div
+                      className="funnel-bar-fill"
+                      style={{ width: `${(s.count / max) * 100}%`, background: FUNNEL_BAR_COLORS[i] || FUNNEL_BAR_COLORS[0] }}
+                    />
+                  </div>
+                </div>
+                <div className="font-mono text-lg font-medium text-primary min-w-[30px] text-right">{s.count}</div>
+                <div className="text-[11px] text-muted-foreground min-w-[48px]">
+                  {s.conversionRate !== null ? `${(s.conversionRate * 100).toFixed(0)}%` : ''}
+                </div>
+                {s.dropOff > 0 && (
+                  <div className="text-[11px] text-destructive min-w-[70px]">↓ {s.dropOff} lost</div>
+                )}
+                <div className="text-faint">
+                  {expandedStage === s.label ? <ChevronUp className="h-3.5 w-3.5" /> : <ChevronDown className="h-3.5 w-3.5" />}
+                </div>
+              </div>
+            ))}
           </div>
-        </CardContent>
-      </Card>
 
-      {/* Stage Transitions */}
-      <div className="grid gap-3 md:grid-cols-2 lg:grid-cols-4">
-        {patientFunnel.stages.slice(1).map((stage, i) => {
-          const isWorst = i + 1 === worstDropIdx;
-          return (
-            <Card
-              key={stage.label}
-              className={`cursor-pointer transition-colors hover:bg-accent/30 ${isWorst ? 'border-warning/50' : ''}`}
-              onClick={() => toggleStage(stage.label)}
-            >
-              <CardContent className="p-3">
-                <div className="flex items-center justify-between mb-1">
-                  <span className="text-[10px] text-muted-foreground">{stage.label}</span>
-                  {isWorst && <Badge variant="outline" className="text-[8px] bg-warning/10 text-warning border-warning/30">Biggest Drop</Badge>}
-                </div>
-                <div className="text-xl font-bold">{stage.count}</div>
-                {stage.conversionRate !== null && (
-                  <div className="text-xs text-muted-foreground">
-                    {(stage.conversionRate * 100).toFixed(0)}% conversion
-                  </div>
-                )}
-                {stage.dropOff > 0 && (
-                  <div className="text-[10px] text-destructive/70 mt-1">
-                    {stage.dropOffLabel}
-                  </div>
-                )}
-                <div className="text-[10px] text-primary mt-1 flex items-center gap-1">
-                  {expandedStage === stage.label ? <ChevronUp className="h-2.5 w-2.5" /> : <ChevronDown className="h-2.5 w-2.5" />}
-                  View patients
-                </div>
-              </CardContent>
-            </Card>
-          );
-        })}
-      </div>
-
-      {/* Expanded Patient List */}
-      {expandedStage && patientFunnel.stagePatients[expandedStage] && (
-        <Card>
-          <CardHeader className="pb-2">
-            <CardTitle className="text-xs font-semibold">{expandedStage} — {patientFunnel.stagePatients[expandedStage].length} patients</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="rounded border overflow-auto max-h-[300px]">
+          {/* Expanded patient list */}
+          {expandedStage && patientFunnel.stagePatients[expandedStage] && (
+            <div className="mt-4 border rounded overflow-auto max-h-[300px]">
               <Table>
                 <TableHeader>
                   <TableRow>
@@ -181,11 +191,11 @@ export default function PatientFlowPage() {
                 <TableBody>
                   {patientFunnel.stagePatients[expandedStage].map((p, i) => (
                     <TableRow key={i}>
-                      <TableCell className="text-[10px]">{p.name}</TableCell>
-                      <TableCell className="text-[10px]">{p.provider}</TableCell>
-                      <TableCell className="text-[10px]">{p.lastVisitDate}</TableCell>
-                      <TableCell className="text-[10px] text-right">{p.completedVisitCount}</TableCell>
-                      <TableCell className="text-[10px]">
+                      <TableCell className="text-[11px] font-medium">{p.name}</TableCell>
+                      <TableCell className="text-[11px]">{p.provider}</TableCell>
+                      <TableCell className="text-[11px]">{p.lastVisitDate}</TableCell>
+                      <TableCell className="text-[11px] text-right">{p.completedVisitCount}</TableCell>
+                      <TableCell className="text-[11px]">
                         {p.stages.map(s => (
                           <Badge key={s} variant="outline" className="text-[8px] mr-0.5">{s}</Badge>
                         ))}
@@ -195,68 +205,20 @@ export default function PatientFlowPage() {
                 </TableBody>
               </Table>
             </div>
-          </CardContent>
-        </Card>
-      )}
+          )}
 
-      {/* Three-Metric Retention Framework */}
-      <Card>
-        <CardHeader className="pb-2">
-          <CardTitle className="text-sm font-semibold">Three-Metric Retention Framework</CardTitle>
-          <CardDescription className="text-xs">
-            Three connected views of patient retention across the care journey.
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
-          <div className="grid gap-4 md:grid-cols-3">
-            <div className="p-4 rounded-lg border bg-card">
-              <div className="text-[10px] text-muted-foreground uppercase tracking-wider mb-1">Schedule Reliability</div>
-              <div className="text-2xl font-bold">
-                {metrics.totalScheduled > 0 ? ((metrics.totalCompleted / metrics.totalScheduled) * 100).toFixed(1) : '0'}%
-              </div>
-              <div className="text-xs text-muted-foreground">
-                {metrics.totalCompleted} / {metrics.totalScheduled} visits
-              </div>
-              <div className="text-[9px] text-muted-foreground mt-1 border-t pt-1">visit-based</div>
-              <div className="text-[10px] text-muted-foreground mt-1">How well the appointment schedule holds</div>
-            </div>
-
-            <div className="p-4 rounded-lg border bg-card">
-              <div className="text-[10px] text-muted-foreground uppercase tracking-wider mb-1">Treatment Follow-Through</div>
-              <div className="text-2xl font-bold">
-                {patientFunnel.rofPatientCount > 0
-                  ? ((patientFunnel.txStartedCount / patientFunnel.rofPatientCount) * 100).toFixed(0)
-                  : '0'}%
-              </div>
-              <div className="text-xs text-muted-foreground">
-                {patientFunnel.txStartedCount} / {patientFunnel.rofPatientCount} patients
-              </div>
-              <div className="text-[9px] text-muted-foreground mt-1 border-t pt-1">patient-based</div>
-              <div className="text-[10px] text-muted-foreground mt-1">Patients who began care after ROF</div>
-            </div>
-
-            <div className="p-4 rounded-lg border bg-card">
-              <div className="text-[10px] text-muted-foreground uppercase tracking-wider mb-1">Care Continuation</div>
-              <div className="text-2xl font-bold">
-                {patientFunnel.txStartedCount > 0
-                  ? ((patientFunnel.activeCareCount / patientFunnel.txStartedCount) * 100).toFixed(0)
-                  : '0'}%
-              </div>
-              <div className="text-xs text-muted-foreground">
-                {patientFunnel.activeCareCount} / {patientFunnel.txStartedCount} patients
-              </div>
-              <div className="text-[9px] text-muted-foreground mt-1 border-t pt-1">patient-based</div>
-              <div className="text-[10px] text-muted-foreground mt-1">Patients with 3+ treatment visits</div>
-            </div>
-          </div>
-
-          <div className="text-[10px] text-muted-foreground mt-4 p-2.5 rounded bg-muted/50 border">
-            These three metrics together tell whether patients show up reliably (Schedule Reliability),
-            accept treatment plans (Follow-Through), and commit to the full care sequence (Continuation).
-            A high reliability with low continuation may indicate patients attend but leave before care is complete.
+          <div className="text-[10px] text-faint mt-3 p-2.5 rounded border bg-muted/30">
+            Stage counts reflect unique patients who completed each care stage. Total visit counts are shown separately in schedule metrics.
           </div>
         </CardContent>
       </Card>
+
+      {/* Retention insight text block */}
+      <div className="text-[11px] text-muted-foreground p-4 rounded border bg-muted/30 leading-relaxed">
+        These three metrics together tell whether patients show up reliably (Schedule Reliability),
+        accept treatment plans (Follow-Through), and commit to the full care sequence (Continuation).
+        A high reliability with low continuation may indicate patients attend but leave before care is complete.
+      </div>
     </div>
   );
 }
