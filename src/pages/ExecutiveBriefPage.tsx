@@ -249,8 +249,7 @@ export default function ExecutiveBriefPage() {
                 </div>
               )}
               <div className="text-[10px] text-faint italic">
-                Leakage uses configurable avg visit value (${revenueMetrics.configuredAvgVisitValue}). 
-                Posted charges from report may include plan totals. Adjust in Settings.
+                All estimates use configurable avg visit value (${revenueMetrics.configuredAvgVisitValue}). Adjust in Settings.
               </div>
             </CardContent>
           </Card>
