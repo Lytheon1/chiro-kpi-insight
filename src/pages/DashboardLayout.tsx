@@ -1,12 +1,12 @@
-import { Outlet, useNavigate } from 'react-router-dom';
+import { Outlet, useNavigate, useLocation } from 'react-router-dom';
 import { useDashboard } from '@/lib/context/DashboardContext';
 import { SidebarProvider, SidebarTrigger } from '@/components/ui/sidebar';
 import { AppSidebar } from '@/components/AppSidebar';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Badge } from '@/components/ui/badge';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { KeywordsConfig } from '@/components/dashboard/KeywordsConfigPanel';
 import { Settings } from 'lucide-react';
 import { useState, useEffect } from 'react';
@@ -15,8 +15,19 @@ import { isSingleProviderMode } from '@/lib/utils/providerColors';
 import { loadFiltersFromStorage, saveFiltersToStorage } from '@/lib/utils/keywords';
 import type { DashboardFilters } from '@/types/reports';
 
+const PAGE_META: Record<string, { title: string; subtitle: string }> = {
+  '/executive-brief': { title: 'Executive Brief', subtitle: 'Doctor View · Operational Summary' },
+  '/patient-flow': { title: 'Patient Flow', subtitle: 'Care funnel and retention metrics' },
+  '/patients-at-risk': { title: 'Patients at Risk', subtitle: 'Risk scoring and intervention priority' },
+  '/analysis': { title: 'Operational Analysis', subtitle: 'Schedule patterns, disruptions, and revenue' },
+  '/patients': { title: 'Patient Review', subtitle: 'Individual patient progression review' },
+  '/validation': { title: 'Data Validation', subtitle: 'Parser diagnostics and metric confidence' },
+  '/evidence': { title: 'Evidence', subtitle: 'Metric evidence and source data' },
+};
+
 export default function DashboardLayout() {
   const navigate = useNavigate();
+  const location = useLocation();
   const ctx = useDashboard();
   const {
     isLoaded, endOfDay, filters, setFilters, goals, setGoals,
@@ -27,19 +38,16 @@ export default function DashboardLayout() {
   const [filtersRestored, setFiltersRestored] = useState(false);
 
   const singleProvider = isSingleProviderMode(allProviders);
+  const pageMeta = PAGE_META[location.pathname] || { title: '', subtitle: '' };
 
-  // Restore filters from localStorage on mount
   useEffect(() => {
     if (!filtersRestored) {
       const saved = loadFiltersFromStorage();
-      if (saved) {
-        setFilters(saved as DashboardFilters);
-      }
+      if (saved) setFilters(saved as DashboardFilters);
       setFiltersRestored(true);
     }
   }, [filtersRestored, setFilters]);
 
-  // Auto-select the sole provider when only one exists
   useEffect(() => {
     if (isLoaded && singleProvider && allProviders.length === 1 && selectedProvider === 'All') {
       setSelectedProvider(allProviders[0]);
@@ -69,52 +77,50 @@ export default function DashboardLayout() {
     saveFiltersToStorage(newFilters);
   };
 
-  const exclusions = [
-    ...(filters.excludedPurposeKeywords ?? []),
-    ...(filters.massageKeywords ?? []),
-  ].filter(Boolean);
-
   return (
     <SidebarProvider>
       <div className="min-h-screen flex w-full bg-background">
         <AppSidebar />
         <div className="flex-1 flex flex-col min-w-0">
-          {/* Top bar */}
-          <header className="h-11 flex items-center border-b bg-card px-3 sticky top-0 z-30 gap-2">
-            <SidebarTrigger className="h-7 w-7" />
-            <div className="flex-1" />
-            {isLoaded && !singleProvider && !settingsOpen && (
-              <Select value={selectedProvider} onValueChange={setSelectedProvider}>
-                <SelectTrigger className="w-[180px] h-7 text-xs"><SelectValue /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="All">All Providers</SelectItem>
-                  {allProviders.map(p => <SelectItem key={p} value={p}>{p}</SelectItem>)}
-                </SelectContent>
-              </Select>
-            )}
-            <Button variant="ghost" size="sm" className="h-7 w-7 p-0" onClick={() => setSettingsOpen(!settingsOpen)}>
-              <Settings className="h-3.5 w-3.5" />
-            </Button>
+          {/* Sticky Page Header */}
+          <header className="bg-card border-b sticky top-0 z-30 px-7 py-4 flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              <SidebarTrigger className="h-7 w-7" />
+              <div>
+                <h1 className="page-title">{pageMeta.title}</h1>
+                {pageMeta.subtitle && (
+                  <p className="text-[12px] text-faint mt-0.5">
+                    {pageMeta.subtitle}
+                    {singleProvider && allProviders[0] ? ` · ${allProviders[0]}` : ''}
+                    {endOfDay?.minDate && endOfDay?.maxDate ? ` · ${endOfDay.minDate} — ${endOfDay.maxDate}` : ''}
+                  </p>
+                )}
+              </div>
+            </div>
+            <div className="flex items-center gap-3">
+              {isLoaded && (
+                <Badge variant="outline" className="text-[10px] gap-1 bg-success/10 text-success border-success/30">
+                  <span className="w-1.5 h-1.5 rounded-full bg-success inline-block" />
+                  Data Loaded
+                </Badge>
+              )}
+              {isLoaded && !singleProvider && (
+                <Select value={selectedProvider} onValueChange={setSelectedProvider}>
+                  <SelectTrigger className="w-[160px] h-7 text-xs"><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="All">All Providers</SelectItem>
+                    {allProviders.map(p => <SelectItem key={p} value={p}>{p}</SelectItem>)}
+                  </SelectContent>
+                </Select>
+              )}
+              <Button variant="ghost" size="sm" className="h-7 w-7 p-0" onClick={() => setSettingsOpen(!settingsOpen)}>
+                <Settings className="h-3.5 w-3.5" />
+              </Button>
+            </div>
           </header>
 
           <div className="flex-1 overflow-auto">
-            <div className="container mx-auto px-4 py-6 max-w-[1600px]">
-              {endOfDay?.minDate && endOfDay?.maxDate && (
-                <div className="mb-4 space-y-1">
-                  <p className="text-xs text-muted-foreground font-mono">
-                    Report Period: {endOfDay.minDate} — {endOfDay.maxDate}
-                    {singleProvider && allProviders[0] && (
-                      <span className="ml-3 font-semibold text-foreground">{allProviders[0]}</span>
-                    )}
-                  </p>
-                  {exclusions.length > 0 && (
-                    <p className="text-[10px] text-muted-foreground px-2 py-1 rounded bg-muted/50 border inline-block">
-                      Active exclusions: {exclusions.join(', ')} | Massage excluded from retention
-                    </p>
-                  )}
-                </div>
-              )}
-
+            <div className="px-7 py-6 max-w-[1400px]">
               {settingsOpen && (
                 <div className="space-y-4 mb-6">
                   <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-6 p-4 rounded-lg border bg-card">
@@ -159,10 +165,25 @@ export default function DashboardLayout() {
                   <KeywordsConfig filters={filters} onFiltersChange={handleFiltersChange} />
                 </div>
               )}
-
               <Outlet />
             </div>
           </div>
+
+          {/* Footer */}
+          <footer className="bg-card border-t px-7 py-3 flex items-center gap-4 text-[11px] text-faint">
+            {isLoaded && endOfDay?.minDate && endOfDay?.maxDate && (
+              <>
+                <span>Lakeside Spine & Wellness · {endOfDay.minDate} — {endOfDay.maxDate}</span>
+                {singleProvider && allProviders[0] && <span>Provider: {allProviders[0]}</span>}
+                <span>{endOfDay.appointments.length} appointments</span>
+                <div className="flex-1" />
+                <Badge variant="outline" className="text-[10px] gap-1 bg-success/10 text-success border-success/30">
+                  <span className="w-1.5 h-1.5 rounded-full bg-success inline-block" />
+                  High Confidence
+                </Badge>
+              </>
+            )}
+          </footer>
         </div>
       </div>
     </SidebarProvider>

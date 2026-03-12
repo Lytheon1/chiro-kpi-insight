@@ -4,53 +4,59 @@
 
 @layer base {
   :root {
-    --background: 220 16% 96%;
-    --foreground: 220 25% 12%;
+    --font-display: 'DM Serif Display', serif;
+    --font-body: 'DM Sans', sans-serif;
+    --font-mono: 'DM Mono', monospace;
+
+    --background: 40 14% 95%;
+    --foreground: 43 8% 9%;
 
     --card: 0 0% 100%;
-    --card-foreground: 220 25% 12%;
+    --card-foreground: 43 8% 9%;
 
     --popover: 0 0% 100%;
-    --popover-foreground: 220 25% 12%;
+    --popover-foreground: 43 8% 9%;
 
-    --primary: 220 40% 22%;
+    --primary: 215 38% 19%;
     --primary-foreground: 0 0% 100%;
 
-    --secondary: 220 14% 46%;
+    --secondary: 213 63% 40%;
     --secondary-foreground: 0 0% 100%;
 
-    --muted: 220 14% 92%;
-    --muted-foreground: 220 10% 46%;
+    --muted: 37 10% 92%;
+    --muted-foreground: 33 6% 40%;
 
-    --accent: 220 20% 88%;
-    --accent-foreground: 220 25% 12%;
+    --accent: 37 10% 88%;
+    --accent-foreground: 43 8% 9%;
 
-    --destructive: 0 60% 48%;
+    --destructive: 347 70% 36%;
     --destructive-foreground: 0 0% 100%;
 
-    --success: 152 48% 42%;
+    --success: 152 65% 29%;
     --success-foreground: 0 0% 100%;
 
-    --warning: 38 80% 50%;
+    --warning: 36 87% 31%;
     --warning-foreground: 0 0% 100%;
 
-    --attention: 350 45% 55%;
+    --attention: 347 70% 36%;
     --attention-foreground: 0 0% 100%;
 
-    --border: 220 14% 88%;
-    --input: 220 14% 88%;
-    --ring: 220 40% 22%;
+    --faint: 33 6% 60%;
+
+    --border: 37 10% 87%;
+    --input: 37 10% 87%;
+    --ring: 215 38% 19%;
 
     --radius: 0.5rem;
 
-    --sidebar-background: 0 0% 98%;
-    --sidebar-foreground: 240 5.3% 26.1%;
-    --sidebar-primary: 240 5.9% 10%;
-    --sidebar-primary-foreground: 0 0% 98%;
-    --sidebar-accent: 240 4.8% 95.9%;
-    --sidebar-accent-foreground: 240 5.9% 10%;
-    --sidebar-border: 220 13% 91%;
-    --sidebar-ring: 217.2 91.2% 59.8%;
+    --sidebar-background: 215 38% 19%;
+    --sidebar-foreground: 0 0% 100%;
+    --sidebar-primary: 0 0% 100%;
+    --sidebar-primary-foreground: 215 38% 19%;
+    --sidebar-accent: 215 38% 25%;
+    --sidebar-accent-foreground: 0 0% 100%;
+    --sidebar-border: 215 30% 28%;
+    --sidebar-ring: 213 63% 40%;
   }
 
   .dark {
@@ -63,10 +69,10 @@
     --popover: 220 20% 10%;
     --popover-foreground: 220 14% 92%;
 
-    --primary: 220 40% 60%;
+    --primary: 213 63% 55%;
     --primary-foreground: 0 0% 100%;
 
-    --secondary: 220 14% 55%;
+    --secondary: 213 50% 45%;
     --secondary-foreground: 0 0% 100%;
 
     --muted: 220 16% 16%;
@@ -75,7 +81,7 @@
     --accent: 220 16% 20%;
     --accent-foreground: 220 14% 92%;
 
-    --destructive: 0 60% 48%;
+    --destructive: 347 60% 48%;
     --destructive-foreground: 0 0% 100%;
 
     --success: 152 48% 42%;
@@ -87,18 +93,20 @@
     --attention: 350 45% 55%;
     --attention-foreground: 0 0% 100%;
 
+    --faint: 33 6% 45%;
+
     --border: 220 16% 20%;
     --input: 220 16% 20%;
-    --ring: 220 40% 60%;
+    --ring: 213 63% 55%;
 
-    --sidebar-background: 240 5.9% 10%;
-    --sidebar-foreground: 240 4.8% 95.9%;
-    --sidebar-primary: 224.3 76.3% 48%;
+    --sidebar-background: 220 20% 8%;
+    --sidebar-foreground: 220 14% 92%;
+    --sidebar-primary: 213 63% 55%;
     --sidebar-primary-foreground: 0 0% 100%;
-    --sidebar-accent: 240 3.7% 15.9%;
-    --sidebar-accent-foreground: 240 4.8% 95.9%;
-    --sidebar-border: 240 3.7% 15.9%;
-    --sidebar-ring: 217.2 91.2% 59.8%;
+    --sidebar-accent: 220 16% 14%;
+    --sidebar-accent-foreground: 220 14% 92%;
+    --sidebar-border: 220 16% 18%;
+    --sidebar-ring: 213 63% 55%;
   }
 }
 
@@ -109,6 +117,129 @@
 
   body {
     @apply bg-background text-foreground;
-    font-feature-settings: "cv02", "cv03", "cv04", "cv11";
+    font-family: var(--font-body);
+    font-size: 14px;
+    line-height: 1.5;
+  }
+
+  h1, h2, h3 {
+    font-family: var(--font-display);
+  }
+}
+
+/* Utility classes for the design system */
+@layer components {
+  .font-display {
+    font-family: var(--font-display);
+  }
+  .font-body {
+    font-family: var(--font-body);
+  }
+  .font-mono-dm {
+    font-family: var(--font-mono);
+  }
+  .text-faint {
+    color: hsl(var(--faint));
+  }
+
+  /* Evidence label */
+  .evidence-label {
+    @apply text-[9px] font-bold tracking-widest uppercase px-1.5 py-0.5 rounded border inline-block;
+    color: hsl(var(--faint));
+    border-color: hsl(var(--border));
+  }
+
+  /* Insight blocks */
+  .insight-block {
+    @apply border-l-[3px] rounded-r-md p-3 cursor-pointer transition-colors;
+  }
+  .insight-block-high {
+    border-color: hsl(var(--destructive));
+    background: hsl(347 70% 36% / 0.05);
+  }
+  .insight-block-medium {
+    border-color: hsl(var(--warning));
+    background: hsl(36 87% 31% / 0.05);
+  }
+  .insight-block-low {
+    border-color: hsl(var(--faint));
+    background: hsl(var(--muted) / 0.5);
+  }
+  .insight-block-positive {
+    border-color: hsl(var(--success));
+    background: hsl(152 65% 29% / 0.05);
+  }
+
+  /* Game plan sections */
+  .gameplan-now {
+    background: hsl(347 70% 36% / 0.05);
+    border: 1px solid hsl(347 70% 36% / 0.2);
+  }
+  .gameplan-week {
+    background: hsl(36 87% 31% / 0.05);
+    border: 1px solid hsl(36 87% 31% / 0.2);
+  }
+  .gameplan-process {
+    background: hsl(213 63% 40% / 0.05);
+    border: 1px solid hsl(213 63% 40% / 0.2);
+  }
+  .gameplan-monitor {
+    background: hsl(152 65% 29% / 0.05);
+    border: 1px solid hsl(152 65% 29% / 0.2);
+  }
+
+  /* Funnel bar */
+  .funnel-bar-track {
+    @apply h-5 rounded-sm overflow-hidden;
+    background: hsl(var(--muted));
+  }
+  .funnel-bar-fill {
+    @apply h-full rounded-sm transition-all duration-500;
+  }
+
+  /* Benchmark bar */
+  .benchmark-bar-track {
+    @apply h-1 rounded-full;
+    background: hsl(var(--muted));
+  }
+
+  /* Health score card */
+  .health-score-card {
+    background: hsl(var(--primary));
+    @apply rounded-lg p-6 text-primary-foreground;
+  }
+
+  /* Risk score pill */
+  .risk-score-pill {
+    @apply inline-flex items-center justify-center w-7 h-7 rounded-full text-[11px] font-semibold;
+    font-family: var(--font-mono);
+  }
+
+  /* KPI value */
+  .kpi-value {
+    font-family: var(--font-display);
+    @apply text-3xl leading-none;
+    color: hsl(var(--primary));
+  }
+
+  /* Revenue value */
+  .revenue-value {
+    font-family: var(--font-display);
+    @apply text-2xl;
+    color: hsl(var(--primary));
+  }
+
+  /* Retention card */
+  .retention-value {
+    font-family: var(--font-display);
+    @apply text-4xl;
+    color: hsl(var(--primary));
+  }
+
+  /* Page title */
+  .page-title {
+    font-family: var(--font-display);
+    @apply text-xl;
+    color: hsl(var(--primary));
   }
 }
