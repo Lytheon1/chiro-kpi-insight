@@ -74,26 +74,40 @@ export default function ExecutiveBriefPage() {
 
       {/* ROW 2: Three-question KPI strip */}
       <div className="grid gap-4 md:grid-cols-3">
-        <KPICard
-          label="SCHEDULE RELIABILITY"
-          question="Are we keeping patients?"
-          value={`${(schedReliability * 100).toFixed(1)}%`}
-          sub={`${metrics.totalCompleted} / ${metrics.totalScheduled} visits completed`}
-          benchmark={getBenchmarkStatus(schedReliability, BENCHMARKS.scheduleReliability)}
-          benchmarkThresholds={BENCHMARKS.scheduleReliability}
-          rawValue={schedReliability * 100}
-        />
-        <KPICard
-          label="DISRUPTION RATE"
-          question="Are we losing visits?"
-          value={`${(disruptionRate * 100).toFixed(1)}%`}
-          sub={`${metrics.totalCanceled + metrics.totalNoShow + metrics.rescheduledCount} disruption events`}
-          benchmark={getBenchmarkStatus(1 - disruptionRate, BENCHMARKS.disruptionResistance)}
-          benchmarkThresholds={{ excellent: 8, healthy: 15, watch: 22 }}
-          rawValue={disruptionRate * 100}
-          inverted
-          helper={`${metrics.totalCanceled} canceled · ${metrics.rescheduledCount} rescheduled · ${metrics.totalNoShow} no-shows`}
-        />
+        <div
+          className="bg-card border rounded-lg p-4 cursor-pointer hover:shadow-md hover:border-secondary transition-all"
+          onClick={() => navigate('/patient-flow')}
+        >
+          <div className="text-[11px] text-faint font-medium tracking-wide">SCHEDULE RELIABILITY</div>
+          <div className="text-[11px] text-faint mb-1">Are we keeping patients?</div>
+          <div className="font-display text-3xl text-primary mt-1">{(schedReliability * 100).toFixed(1)}%</div>
+          <div className="text-[11px] text-muted-foreground mt-0.5">{metrics.totalCompleted} / {metrics.totalScheduled} visits completed</div>
+          <div className="mt-2 flex items-center gap-2">
+            <Badge variant="outline" className={`text-[10px] ${STATUS_BG[getBenchmarkStatus(schedReliability, BENCHMARKS.scheduleReliability)]}`}>
+              {STATUS_LABELS[getBenchmarkStatus(schedReliability, BENCHMARKS.scheduleReliability)]}
+            </Badge>
+          </div>
+          <div className="mt-2 benchmark-bar-track">
+            <div className="h-full rounded-full transition-all" style={{ width: `${Math.min(100, schedReliability * 100)}%`, background: getStatusColor(getBenchmarkStatus(schedReliability, BENCHMARKS.scheduleReliability)) }} />
+          </div>
+          <div className="text-[10px] text-secondary font-medium mt-1.5 flex items-center gap-1">View retention details <ArrowRight className="h-2.5 w-2.5" /></div>
+        </div>
+        <div
+          className="bg-card border rounded-lg p-4 cursor-pointer hover:shadow-md hover:border-secondary transition-all"
+          onClick={() => navigate('/patients?filter=disruption_heavy')}
+        >
+          <div className="text-[11px] text-faint font-medium tracking-wide">DISRUPTION RATE</div>
+          <div className="text-[11px] text-faint mb-1">Are we losing visits?</div>
+          <div className="font-display text-3xl text-primary mt-1">{(disruptionRate * 100).toFixed(1)}%</div>
+          <div className="text-[11px] text-muted-foreground mt-0.5">{metrics.totalCanceled + metrics.totalNoShow + metrics.rescheduledCount} disruption events</div>
+          <div className="text-[10px] text-faint mt-0.5">{metrics.totalCanceled} canceled · {metrics.rescheduledCount} rescheduled · {metrics.totalNoShow} no-shows</div>
+          <div className="mt-2 flex items-center gap-2">
+            <Badge variant="outline" className={`text-[10px] ${STATUS_BG[getBenchmarkStatus(1 - disruptionRate, BENCHMARKS.disruptionResistance)]}`}>
+              {STATUS_LABELS[getBenchmarkStatus(1 - disruptionRate, BENCHMARKS.disruptionResistance)]}
+            </Badge>
+          </div>
+          <div className="text-[10px] text-secondary font-medium mt-1.5 flex items-center gap-1">View disruption details <ArrowRight className="h-2.5 w-2.5" /></div>
+        </div>
         <div
           className="bg-card border rounded-lg p-4 cursor-pointer hover:shadow-md hover:border-secondary transition-all"
           onClick={() => navigate('/patient-flow')}
