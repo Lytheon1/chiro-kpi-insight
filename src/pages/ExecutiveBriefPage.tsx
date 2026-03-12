@@ -29,8 +29,9 @@ export default function ExecutiveBriefPage() {
   const navigate = useNavigate();
   const {
     metrics, carePathAnalysis, insights, goals, effectiveWeeks,
-    sequenceAnalysis, validationReport, evidenceStore, endOfDay,
+    sequenceAnalysis, validationReport, evidenceStore, endOfDay, allProviders,
   } = useDashboard();
+  const singleProvider = allProviders.length <= 1;
 
   if (!metrics) return null;
 
