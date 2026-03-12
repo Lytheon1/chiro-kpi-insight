@@ -72,13 +72,15 @@ export function parseCanceledMissedRescheduled(file: File): Promise<ParsedCMR> {
           }
         }
 
-        // Deduplicate
-        const seen = new Set<string>();
+        // Deduplicate — allow up to N identical rows if they appear separately in the report
+        const seen = new Map<string, number>();
         const deduped: CmrRow[] = [];
         for (const r of rawRows) {
           const key = [r.patientName ?? "", r.provider, r.date, r.time ?? "", r.apptTypeRaw, r.statusRaw, r.reasonRaw ?? "", r.location ?? ""].join("|");
-          if (!seen.has(key)) {
-            seen.add(key);
+          const count = seen.get(key) ?? 0;
+          // Allow the same key up to 2 times (handles genuine separate events with identical fields)
+          if (count < 2) {
+            seen.set(key, count + 1);
             deduped.push(r);
           }
         }
