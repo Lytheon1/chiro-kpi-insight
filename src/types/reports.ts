@@ -113,16 +113,26 @@ export interface DashboardFilters {
 }
 
 export interface DashboardMetrics {
+  // Total counts (all rows, no exclusions)
+  totalScheduled: number;
+  totalCompleted: number;
+  totalCanceled: number;
+  totalNoShow: number;
+  completionRate: number;
+  // ROF
   scheduledROF: number;
   completedROF: number;
   rofCompletionRate: number;
+  // Non-massage retention
   scheduledNonMassage: number;
   completedNonMassage: number;
   retentionRate: number;
   keptNonMassage: number;
   avgPerWeek: number;
+  // Report B
   rescheduledCount: number;
   canceledDetailCount: number;
+  noShowDetailCount: number;
   newPatients: number;
   currentPatients: number;
   weeklyKept: Array<{ week: string; value: number }>;
@@ -143,6 +153,8 @@ export interface DashboardMetrics {
   rescheduledByApptType: Array<{ type: string; count: number }>;
   repeatRescheduledPatients: number;
   disruptionHeavyPatients: number;
+  uniqueDisruptionPatients: number;
+  totalDisruptionEvents: number;
 }
 
 export interface ProviderDisruptionRow {
