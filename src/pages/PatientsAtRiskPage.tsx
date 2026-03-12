@@ -39,6 +39,29 @@ export default function PatientsAtRiskPage() {
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('desc');
   const [selectedPatient, setSelectedPatient] = useState<PatientRisk | null>(null);
 
+  const filteredPatients = useMemo(() => {
+    if (!patientRisk) return [];
+    let list = patientRisk.patients;
+    if (selectedRisk !== 'all') list = list.filter(p => p.riskLevel === selectedRisk);
+    if (selectedProvider !== 'all') list = list.filter(p => p.provider === selectedProvider);
+    if (search.trim()) {
+      const q = search.toLowerCase();
+      list = list.filter(p => p.patientName.toLowerCase().includes(q) || p.provider.toLowerCase().includes(q));
+    }
+    const sorted = [...list];
+    sorted.sort((a, b) => {
+      let cmp = 0;
+      switch (sortKey) {
+        case 'riskScore': cmp = a.riskScore - b.riskScore; break;
+        case 'patientName': cmp = a.patientName.localeCompare(b.patientName); break;
+        case 'provider': cmp = a.provider.localeCompare(b.provider); break;
+        case 'lastVisitDate': cmp = a.lastVisitDate.localeCompare(b.lastVisitDate); break;
+      }
+      return sortDir === 'asc' ? cmp : -cmp;
+    });
+    return sorted;
+  }, [patientRisk, selectedRisk, selectedProvider, search, sortKey, sortDir]);
+
   if (!patientRisk) {
     return (
       <Card>
