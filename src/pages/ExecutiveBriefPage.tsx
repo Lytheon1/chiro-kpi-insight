@@ -26,6 +26,13 @@ const tooltipStyle = {
 
 const fmt$ = (n: number) => '$' + n.toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 0 });
 
+function getStatusColor(status: 'excellent' | 'healthy' | 'watch' | 'risk') {
+  return status === 'excellent' ? 'hsl(var(--success))' :
+    status === 'healthy' ? 'hsl(152 48% 42%)' :
+    status === 'watch' ? 'hsl(var(--warning))' :
+    'hsl(var(--destructive))';
+}
+
 export default function ExecutiveBriefPage() {
   const navigate = useNavigate();
   const {
