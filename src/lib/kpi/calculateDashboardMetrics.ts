@@ -16,7 +16,10 @@ export const DEFAULT_FILTERS: DashboardFilters = {
   noShowKeywords: ["no show", "no-show", "noshow"],
   rescheduledKeywords: ["rescheduled", "reschedule"],
   rofKeywords: ["rof: chiro", "rof"],
-  massageKeywords: ["massage"],
+  // "therapy" included here because ChiroTouch labels massage services as
+  // "Therapy: 30min", "Therapy: 50min", "Therapy: 80min", etc.
+  // These are operational-only visits excluded from chiropractic KPIs.
+  massageKeywords: ["massage", "therapy"],
   newPatientKeywords: ["new patient", "np: pi", "np: wellness"],
   returnVisitKeywords: ["return visit: chiropractic", "return visit: pi"],
   reExamKeywords: ["re-exam"],
