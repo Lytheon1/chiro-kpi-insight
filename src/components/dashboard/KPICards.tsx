@@ -12,6 +12,8 @@ interface KPICardsProps {
   metrics: DashboardMetrics;
   goals: Goals;
   weeks: number;
+  patientsNeedingReviewCount?: number;
+  onNeedsReviewClick?: () => void;
 }
 
 const getStatus = (value: number, goal: number, isPercentage: boolean): 'success' | 'warning' | 'error' => {
@@ -25,12 +27,12 @@ const getStatus = (value: number, goal: number, isPercentage: boolean): 'success
   return 'error';
 };
 
-export const KPICards = ({ metrics, goals, weeks }: KPICardsProps) => {
+export const KPICards = ({ metrics, goals, weeks, patientsNeedingReviewCount, onNeedsReviewClick }: KPICardsProps) => {
   const rofPct = metrics.rofCompletionRate * 100;
   const retPct = metrics.retentionRate * 100;
 
   return (
-    <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">
+    <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4 xl:grid-cols-8">
       <KPICard
         title="ROF Completion Rate"
         value={`${rofPct.toFixed(1)}%`}
@@ -69,10 +71,23 @@ export const KPICards = ({ metrics, goals, weeks }: KPICardsProps) => {
         subtitle="From Report B only"
       />
       <KPICard
-        title="New / Current Patients"
-        value={`${metrics.newPatients} / ${metrics.currentPatients}`}
+        title="New Patients"
+        value={metrics.newPatients}
         subtitle="From daily totals"
       />
+      <KPICard
+        title="Current Patients"
+        value={metrics.currentPatients}
+        subtitle="From daily totals"
+      />
+      {patientsNeedingReviewCount !== undefined && (
+        <KPICard
+          title="Patients Needing Review"
+          value={patientsNeedingReviewCount}
+          subtitle="Possible progression gap or disruptions"
+          onClick={onNeedsReviewClick}
+        />
+      )}
     </div>
   );
 };

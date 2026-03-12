@@ -4,6 +4,7 @@ import type { CmrRow, ParsedCMR } from "../../types/reports";
 
 /**
  * Parses ChiroTouch "Canceled/Missed/Rescheduled Appointments" export.
+ * Now captures patientName from section header rows above event rows.
  */
 export function parseCanceledMissedRescheduled(file: File): Promise<ParsedCMR> {
   return new Promise((resolve, reject) => {
@@ -15,7 +16,6 @@ export function parseCanceledMissedRescheduled(file: File): Promise<ParsedCMR> {
         const ws = wb.Sheets[wb.SheetNames[0]];
         const rows: unknown[][] = XLSX.utils.sheet_to_json(ws, { header: 1, defval: "" });
 
-        // Validate report type
         const titleCell = normalizeText(rows[0]?.[0]);
         if (!titleCell.includes("canceled/missed") && !titleCell.includes("cancelled/missed")) {
           throw new Error(
@@ -25,6 +25,8 @@ export function parseCanceledMissedRescheduled(file: File): Promise<ParsedCMR> {
         }
 
         const rawRows: CmrRow[] = [];
+        // Track current patient name from section headers
+        let currentPatientName: string | undefined = undefined;
 
         for (let i = 0; i < rows.length; i++) {
           const row = rows[i];
@@ -40,8 +42,18 @@ export function parseCanceledMissedRescheduled(file: File): Promise<ParsedCMR> {
           if (typeof col0 === "string" && /^\d{1,2}:\d{2}\s*(am|pm)$/i.test(col0Str)) continue;
           if (col0Str === "date" && col6Str === "status") continue;
           if (col0Str.startsWith("phone numbers")) continue;
-          if (typeof col0 === "string" && col0Str && !col6Str && !col2Str) continue;
 
+          // Patient name rows: col0 is non-numeric text, col2 is empty, col6 is empty
+          if (typeof col0 === "string" && col0Str && !col6Str && !col2Str) {
+            // This is a patient name section header — update state
+            const name = String(col0).trim();
+            if (name && !col0Str.startsWith("phone numbers")) {
+              currentPatientName = name;
+            }
+            continue;
+          }
+
+          // Valid event rows: col0 is a number (Excel date serial) AND col2 and col6 have content
           if (typeof col0 === "number" && col0 > 1000 && col2Str && col6Str) {
             const date = normalizeDate(col0);
             if (!date) continue;
@@ -55,6 +67,7 @@ export function parseCanceledMissedRescheduled(file: File): Promise<ParsedCMR> {
               location: String(row[5] || "").trim(),
               statusRaw: String(row[6] || "").trim(),
               reasonRaw: String(row[7] || "").trim() || undefined,
+              patientName: currentPatientName,
             });
           }
         }
