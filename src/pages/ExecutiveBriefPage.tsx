@@ -1,8 +1,9 @@
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
-import { Info, ArrowRight, ShieldCheck, ShieldAlert, Calendar } from 'lucide-react';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+import { Info, ArrowRight, HelpCircle, Calendar } from 'lucide-react';
 import {
   LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip,
   ResponsiveContainer, Legend, ReferenceLine,
@@ -59,6 +60,9 @@ export default function ExecutiveBriefPage() {
   const confLabel = overallConf === 'high' ? 'high' : overallConf === 'review' ? 'medium' : 'low';
   const confVariance = validationReport?.fields.reduce((max, f) => Math.max(max, f.pctDifference), 0) ?? 0;
 
+  const completionRatePct = (metrics.completionRate * 100).toFixed(1);
+  const retentionRatePct = (metrics.retentionRate * 100).toFixed(1);
+
   return (
     <div className="space-y-6">
       {/* Brief Header */}
@@ -73,69 +77,161 @@ export default function ExecutiveBriefPage() {
         </div>
       </div>
 
-      {/* KPI Row */}
-      <div className="grid gap-3 grid-cols-2 lg:grid-cols-4 xl:grid-cols-8">
+      {/* KPI Row — Primary counts */}
+      <div className="grid gap-3 grid-cols-2 lg:grid-cols-4">
+        <MetricCard
+          label="Total Scheduled Visits"
+          value={metrics.totalScheduled}
+          helper="All appointments on the schedule this period"
+        />
+        <MetricCard
+          label="Completed Visits"
+          value={metrics.totalCompleted}
+          helper="Checked-out appointments"
+        />
+        <MetricCard
+          label="Canceled Visits"
+          value={metrics.totalCanceled}
+          helper="Did not occur — includes patient cancellations"
+        />
+        <MetricCard
+          label="Completion Rate"
+          value={`${completionRatePct}%`}
+          helper={`${metrics.totalCompleted} / ${metrics.totalScheduled}`}
+        />
+      </div>
+
+      {/* KPI Row — Retention & ROF */}
+      <div className="grid gap-3 grid-cols-2 lg:grid-cols-4 xl:grid-cols-6">
         <MetricCard
           label="ROF Completion"
           value={`${(metrics.rofCompletionRate * 100).toFixed(1)}%`}
-          sub={`${metrics.completedROF}/${metrics.scheduledROF}`}
+          helper={`${metrics.completedROF} of ${metrics.scheduledROF} ROF appointments completed`}
           goal={goals.rofRate}
           actual={metrics.rofCompletionRate * 100}
           evidence={evidenceStore[METRIC_KEYS.ROF_COMPLETION_RATE]}
         />
         <MetricCard
-          label="Retention Rate"
-          value={`${(metrics.retentionRate * 100).toFixed(1)}%`}
-          sub="Excl. massage"
+          label="Retention Rate (excl. massage & admin)"
+          value={`${retentionRatePct}%`}
+          helper={`${metrics.completedNonMassage} of ${metrics.scheduledNonMassage} — excludes massage and phone/admin visits`}
           goal={goals.retentionRate}
           actual={metrics.retentionRate * 100}
           evidence={evidenceStore[METRIC_KEYS.RETENTION_RATE]}
         />
         <MetricCard
-          label="Total Kept"
+          label="Completed (excl. massage & admin)"
           value={metrics.keptNonMassage}
-          sub={`${effectiveWeeks}wk period`}
+          helper="Checked-out appointments excluding massage and phone/admin visits"
           goal={goals.quarterlyKept}
           actual={metrics.keptNonMassage}
           evidence={evidenceStore[METRIC_KEYS.TOTAL_KEPT]}
         />
         <MetricCard
-          label="Weekly Avg"
+          label="Weekly Avg Completed"
           value={metrics.avgPerWeek.toFixed(1)}
-          sub="Kept/week"
+          helper={`Average completed per week over ${effectiveWeeks} weeks`}
           goal={goals.weeklyKept}
           actual={metrics.avgPerWeek}
         />
         <MetricCard
-          label="Rescheduled"
-          value={metrics.rescheduledCount}
-          sub="Report B"
-          evidence={evidenceStore[METRIC_KEYS.RESCHEDULED_COUNT]}
-        />
-        <MetricCard
           label="New Patients"
           value={metrics.newPatients}
-          sub="Daily totals"
+          helper="From Report A daily totals"
           evidence={evidenceStore[METRIC_KEYS.NEW_PATIENTS]}
-        />
-        <MetricCard
-          label="Current Patients"
-          value={metrics.currentPatients}
-          sub="Daily totals"
         />
         {carePathAnalysis && (
           <div
             className="p-3 rounded-lg border bg-card cursor-pointer hover:bg-accent/30 transition-colors"
             onClick={() => navigate('/patients')}
           >
-            <div className="text-[10px] text-muted-foreground mb-1">Needs Review</div>
+            <div className="text-[10px] text-muted-foreground mb-1">Patients Needing Review</div>
             <div className="text-xl font-bold">{carePathAnalysis.patientsNeedingReview.length}</div>
             <div className="text-[10px] text-muted-foreground flex items-center gap-1">
-              Click to review <ArrowRight className="h-2.5 w-2.5" />
+              View patients <ArrowRight className="h-2.5 w-2.5" />
             </div>
           </div>
         )}
       </div>
+
+      {/* Disruption Cards */}
+      <Card>
+        <CardHeader className="pb-2">
+          <CardTitle className="flex items-center gap-2 text-sm font-semibold">
+            Reschedule & Disruption Summary
+            <Popover>
+              <PopoverTrigger asChild>
+                <button className="text-muted-foreground hover:text-foreground transition-colors cursor-pointer">
+                  <HelpCircle className="h-4 w-4" />
+                </button>
+              </PopoverTrigger>
+              <PopoverContent className="w-[400px] text-xs space-y-3" side="right">
+                <h4 className="font-semibold text-sm">About Reschedule & Disruption Indicators</h4>
+                <p>These cards count <strong>unique patients</strong>, not appointment events.</p>
+                <p>
+                  <strong>Repeat-Rescheduled Patients:</strong> patients who rescheduled 2 or more
+                  times during the selected period. High repeat-reschedule counts can
+                  indicate scheduling friction or barriers to consistent care.
+                </p>
+                <p>
+                  <strong>Disruption-Heavy Patients:</strong> patients with 2 or more total disruption
+                  events, including any combination of canceled, rescheduled, or
+                  no-show appointments. These patients may benefit from proactive
+                  outreach or scheduling support.
+                </p>
+                <p className="text-muted-foreground italic">
+                  These are operational signals — not clinical judgments. Click either
+                  card to review the affected patient list.
+                </p>
+              </PopoverContent>
+            </Popover>
+          </CardTitle>
+          <CardDescription className="text-xs">
+            From Report B — {metrics.totalDisruptionEvents} total disruption events across {metrics.uniqueDisruptionPatients} unique patients.
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <div className="grid gap-4 sm:grid-cols-3">
+            <div className="p-4 rounded-md bg-muted/50 border">
+              <div className="text-2xl font-bold">{metrics.rescheduledCount}</div>
+              <div className="text-sm font-medium text-muted-foreground">Reschedule Events</div>
+              <div className="text-[10px] text-muted-foreground mt-1">Total rescheduled appointment events</div>
+            </div>
+            <div
+              className="p-4 rounded-md bg-muted/50 border cursor-pointer hover:bg-accent/30 transition-colors group"
+              onClick={() => navigate('/patients?filter=repeat_reschedule')}
+            >
+              <div className="text-2xl font-bold">{metrics.repeatRescheduledPatients}</div>
+              <div className="text-sm font-medium text-muted-foreground">Repeat-Rescheduled Patients</div>
+              <div className="text-[10px] text-muted-foreground mt-1">
+                {metrics.repeatRescheduledPatients} unique patients with 2 or more rescheduled appointments
+              </div>
+              <div className="text-[10px] text-muted-foreground mt-0.5 italic">
+                across {metrics.rescheduledCount} reschedule events total
+              </div>
+              <div className="text-[10px] text-primary mt-1 flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                View patients <ArrowRight className="h-2.5 w-2.5" />
+              </div>
+            </div>
+            <div
+              className="p-4 rounded-md bg-muted/50 border cursor-pointer hover:bg-accent/30 transition-colors group"
+              onClick={() => navigate('/patients?filter=disruption_heavy')}
+            >
+              <div className="text-2xl font-bold">{metrics.disruptionHeavyPatients}</div>
+              <div className="text-sm font-medium text-muted-foreground">Disruption-Heavy Patients</div>
+              <div className="text-[10px] text-muted-foreground mt-1">
+                {metrics.disruptionHeavyPatients} unique patients with 2 or more disruption events
+              </div>
+              <div className="text-[10px] text-muted-foreground mt-0.5 italic">
+                Disruption = any canceled, rescheduled, or no-show appointment
+              </div>
+              <div className="text-[10px] text-primary mt-1 flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                View patients <ArrowRight className="h-2.5 w-2.5" />
+              </div>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
 
       {/* Unexpected Next Step */}
       {sequenceAnalysis && sequenceAnalysis.totalNPPatients > 0 && sequenceAnalysis.unexpectedNextStepCount > 0 && (
@@ -228,7 +324,7 @@ export default function ExecutiveBriefPage() {
         {weeklyComboChart.length > 0 && (
           <Card>
             <CardHeader className="pb-2">
-              <CardTitle className="text-xs font-medium">Weekly Kept Appointments</CardTitle>
+              <CardTitle className="text-xs font-medium">Weekly Completed Appointments</CardTitle>
             </CardHeader>
             <CardContent>
               <ResponsiveContainer width="100%" height={200}>
@@ -239,7 +335,7 @@ export default function ExecutiveBriefPage() {
                   <RechartsTooltip contentStyle={tooltipStyle} />
                   <Legend wrapperStyle={{ fontSize: '10px' }} />
                   <ReferenceLine y={goals.weeklyKept} stroke="hsl(var(--success))" strokeDasharray="3 3" />
-                  <Line type="monotone" dataKey="kept" stroke="hsl(var(--primary))" strokeWidth={2} name="Kept" dot={false} />
+                  <Line type="monotone" dataKey="kept" stroke="hsl(var(--primary))" strokeWidth={2} name="Completed" dot={false} />
                   <Line type="monotone" dataKey="canceled" stroke="hsl(var(--destructive))" strokeWidth={1} strokeDasharray="4 4" name="Canceled" dot={false} opacity={0.4} />
                 </LineChart>
               </ResponsiveContainer>
@@ -270,8 +366,8 @@ export default function ExecutiveBriefPage() {
   );
 }
 
-function MetricCard({ label, value, sub, goal, actual, evidence }: {
-  label: string; value: string | number; sub?: string;
+function MetricCard({ label, value, helper, goal, actual, evidence }: {
+  label: string; value: string | number; helper?: string;
   goal?: number; actual?: number; evidence?: any;
 }) {
   const isAboveGoal = goal !== undefined && actual !== undefined && actual >= goal;
@@ -281,11 +377,11 @@ function MetricCard({ label, value, sub, goal, actual, evidence }: {
   return (
     <div className={`p-3 rounded-lg border bg-card ${statusColor}`}>
       <div className="flex items-center justify-between mb-1">
-        <span className="text-[10px] text-muted-foreground">{label}</span>
+        <span className="text-[10px] text-muted-foreground leading-tight">{label}</span>
         {evidence && <ConfidenceBadge evidence={evidence} compact />}
       </div>
       <div className="text-xl font-bold">{value}</div>
-      {sub && <div className="text-[10px] text-muted-foreground">{sub}</div>}
+      {helper && <div className="text-[10px] text-muted-foreground mt-0.5">{helper}</div>}
       {goal !== undefined && (
         <div className={`text-[10px] font-medium mt-0.5 ${isAboveGoal ? 'text-success' : 'text-destructive'}`}>
           Goal: {goal}
