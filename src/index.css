@@ -2,47 +2,46 @@
 @tailwind components;
 @tailwind utilities;
 
-/* Definition of the design system. All colors, gradients, fonts, etc should be defined here. 
-All colors MUST be HSL.
-*/
-
 @layer base {
   :root {
-    --background: 210 20% 98%;
-    --foreground: 215 25% 15%;
+    --background: 220 16% 96%;
+    --foreground: 220 25% 12%;
 
     --card: 0 0% 100%;
-    --card-foreground: 215 25% 15%;
+    --card-foreground: 220 25% 12%;
 
     --popover: 0 0% 100%;
-    --popover-foreground: 215 25% 15%;
+    --popover-foreground: 220 25% 12%;
 
-    --primary: 210 90% 48%;
+    --primary: 220 40% 22%;
     --primary-foreground: 0 0% 100%;
 
-    --secondary: 150 60% 50%;
+    --secondary: 220 14% 46%;
     --secondary-foreground: 0 0% 100%;
 
-    --muted: 210 20% 95%;
-    --muted-foreground: 215 15% 50%;
+    --muted: 220 14% 92%;
+    --muted-foreground: 220 10% 46%;
 
-    --accent: 195 90% 55%;
-    --accent-foreground: 0 0% 100%;
+    --accent: 220 20% 88%;
+    --accent-foreground: 220 25% 12%;
 
-    --destructive: 0 72% 51%;
+    --destructive: 0 60% 48%;
     --destructive-foreground: 0 0% 100%;
 
-    --success: 150 60% 50%;
+    --success: 152 48% 42%;
     --success-foreground: 0 0% 100%;
 
-    --warning: 38 92% 50%;
+    --warning: 38 80% 50%;
     --warning-foreground: 0 0% 100%;
 
-    --border: 210 20% 88%;
-    --input: 210 20% 88%;
-    --ring: 210 90% 48%;
+    --attention: 350 45% 55%;
+    --attention-foreground: 0 0% 100%;
 
-    --radius: 0.75rem;
+    --border: 220 14% 88%;
+    --input: 220 14% 88%;
+    --ring: 220 40% 22%;
+
+    --radius: 0.5rem;
 
     --sidebar-background: 0 0% 98%;
     --sidebar-foreground: 240 5.3% 26.1%;
@@ -55,39 +54,42 @@ All colors MUST be HSL.
   }
 
   .dark {
-    --background: 215 30% 8%;
-    --foreground: 210 20% 95%;
+    --background: 220 20% 7%;
+    --foreground: 220 14% 92%;
 
-    --card: 215 28% 12%;
-    --card-foreground: 210 20% 95%;
+    --card: 220 20% 10%;
+    --card-foreground: 220 14% 92%;
 
-    --popover: 215 28% 12%;
-    --popover-foreground: 210 20% 95%;
+    --popover: 220 20% 10%;
+    --popover-foreground: 220 14% 92%;
 
-    --primary: 210 90% 52%;
+    --primary: 220 40% 60%;
     --primary-foreground: 0 0% 100%;
 
-    --secondary: 150 60% 45%;
+    --secondary: 220 14% 55%;
     --secondary-foreground: 0 0% 100%;
 
-    --muted: 215 25% 18%;
-    --muted-foreground: 215 15% 60%;
+    --muted: 220 16% 16%;
+    --muted-foreground: 220 10% 55%;
 
-    --accent: 195 90% 50%;
-    --accent-foreground: 0 0% 100%;
+    --accent: 220 16% 20%;
+    --accent-foreground: 220 14% 92%;
 
-    --destructive: 0 72% 51%;
+    --destructive: 0 60% 48%;
     --destructive-foreground: 0 0% 100%;
 
-    --success: 150 60% 45%;
+    --success: 152 48% 42%;
     --success-foreground: 0 0% 100%;
 
-    --warning: 38 92% 50%;
+    --warning: 38 80% 50%;
     --warning-foreground: 0 0% 100%;
 
-    --border: 215 25% 22%;
-    --input: 215 25% 22%;
-    --ring: 210 90% 52%;
+    --attention: 350 45% 55%;
+    --attention-foreground: 0 0% 100%;
+
+    --border: 220 16% 20%;
+    --input: 220 16% 20%;
+    --ring: 220 40% 60%;
 
     --sidebar-background: 240 5.9% 10%;
     --sidebar-foreground: 240 4.8% 95.9%;
@@ -107,5 +109,6 @@ All colors MUST be HSL.
 
   body {
     @apply bg-background text-foreground;
+    font-feature-settings: "cv02", "cv03", "cv04", "cv11";
   }
 }

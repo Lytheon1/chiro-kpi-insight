@@ -1,0 +1,395 @@
+import { useState, useMemo } from 'react';
+import { useNavigate } from 'react-router-dom';
+import { useDashboard } from '@/lib/context/DashboardContext';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { Download, ChevronLeft, ChevronRight, Search, AlertTriangle, ArrowRight } from 'lucide-react';
+import { toast } from 'sonner';
+import Papa from 'papaparse';
+import { containsAny, normalizeText } from '@/lib/utils/normalize';
+import type { CarePathClassification, PatientJourney } from '@/types/reports';
+
+type TabFilter = 'all' | 'needsreview' | 'progression_gap' | 'disruption_heavy' | 'maintenance' | 'quarter_boundary';
+type SortKey = 'date' | 'patientName' | 'provider' | 'status' | 'visitType';
+const PAGE_SIZE = 50;
+
+const classLabels: Record<CarePathClassification, string> = {
+  progressed_as_expected: 'Progressed as Expected',
+  maintenance_phase_only: 'Maintenance Phase Only',
+  possible_progression_gap: 'Possible Progression Gap',
+  quarter_boundary_unclear: 'Quarter-Boundary Unclear',
+  disruption_heavy: 'Disruption Heavy',
+  needs_review: 'Needs Review',
+};
+
+export default function PatientReviewPage() {
+  const navigate = useNavigate();
+  const { carePathAnalysis, activeFilters, allProviders } = useDashboard();
+  const [tab, setTab] = useState<TabFilter>('all');
+  const [search, setSearch] = useState('');
+  const [selectedProvider, setSelectedProvider] = useState('all');
+  const [sortKey, setSortKey] = useState<SortKey>('patientName');
+  const [sortDir, setSortDir] = useState<'asc' | 'desc'>('asc');
+  const [page, setPage] = useState(0);
+  const [selectedJourney, setSelectedJourney] = useState<PatientJourney | null>(null);
+
+  const journeys = carePathAnalysis?.journeys ?? [];
+  const patientsNeedingReview = carePathAnalysis?.patientsNeedingReview ?? [];
+
+  const classCounts = useMemo(() =>
+    journeys.reduce<Record<string, number>>((acc, j) => {
+      acc[j.classification] = (acc[j.classification] ?? 0) + 1;
+      return acc;
+    }, {}), [journeys]);
+
+  const needsReviewCount = patientsNeedingReview.length;
+  const gapCount = journeys.filter(j => j.classification === 'possible_progression_gap').length;
+  const disruptionCount = journeys.filter(j => j.secondaryFlags.includes('disruption_heavy')).length;
+  const repeatResch = useMemo(() => journeys.filter(j => {
+    const rs = j.visits.filter(v => containsAny(normalizeText(v.statusRaw), activeFilters.rescheduledKeywords)).length;
+    return rs >= 2;
+  }).length, [journeys, activeFilters]);
+  const repeatNoShow = useMemo(() => journeys.filter(j => {
+    const ns = j.visits.filter(v => containsAny(normalizeText(v.statusRaw), activeFilters.noShowKeywords)).length;
+    return ns >= 2;
+  }).length, [journeys, activeFilters]);
+
+  const flatRows = useMemo(() => {
+    let jList = journeys;
+    switch (tab) {
+      case 'needsreview': jList = patientsNeedingReview; break;
+      case 'progression_gap': jList = journeys.filter(j => j.classification === 'possible_progression_gap'); break;
+      case 'disruption_heavy': jList = journeys.filter(j => j.secondaryFlags.includes('disruption_heavy')); break;
+      case 'maintenance': jList = journeys.filter(j => j.classification === 'maintenance_phase_only'); break;
+      case 'quarter_boundary': jList = journeys.filter(j => j.classification === 'quarter_boundary_unclear'); break;
+    }
+    if (selectedProvider !== 'all') jList = jList.filter(j => j.provider === selectedProvider);
+    if (search.trim()) {
+      const q = search.toLowerCase();
+      jList = jList.filter(j => j.patientName.toLowerCase().includes(q) || j.provider.toLowerCase().includes(q));
+    }
+    const rows = jList.flatMap(j =>
+      j.visits.map(v => ({
+        patientName: j.patientName, provider: v.provider, date: v.date,
+        visitType: v.purposeRaw, status: v.statusRaw,
+        classification: j.classification, secondaryFlags: j.secondaryFlags, journey: j,
+        visitSequence: j.visits.indexOf(v) + 1,
+        isFlagged: j.classification === 'possible_progression_gap' || j.secondaryFlags.includes('disruption_heavy'),
+      }))
+    );
+    rows.sort((a, b) => {
+      let cmp = 0;
+      switch (sortKey) {
+        case 'date': cmp = a.date.localeCompare(b.date); break;
+        case 'patientName': cmp = a.patientName.localeCompare(b.patientName); break;
+        case 'provider': cmp = a.provider.localeCompare(b.provider); break;
+        case 'status': cmp = a.status.localeCompare(b.status); break;
+        case 'visitType': cmp = a.visitType.localeCompare(b.visitType); break;
+      }
+      return sortDir === 'asc' ? cmp : -cmp;
+    });
+    return rows;
+  }, [journeys, patientsNeedingReview, tab, selectedProvider, search, sortKey, sortDir]);
+
+  if (!carePathAnalysis) {
+    return <Card><CardContent className="py-8 text-center text-muted-foreground text-sm">Upload reports to see patient data.</CardContent></Card>;
+  }
+
+  const totalPages = Math.ceil(flatRows.length / PAGE_SIZE);
+  const paginatedRows = flatRows.slice(page * PAGE_SIZE, (page + 1) * PAGE_SIZE);
+
+  const handleSort = (key: SortKey) => {
+    if (sortKey === key) setSortDir(d => d === 'asc' ? 'desc' : 'asc');
+    else { setSortKey(key); setSortDir('asc'); }
+  };
+  const sortArrow = (key: SortKey) => sortKey === key ? (sortDir === 'asc' ? ' ↑' : ' ↓') : '';
+
+  const exportCSV = () => {
+    const data = flatRows.map(r => ({
+      Patient: r.patientName, Provider: r.provider, Date: r.date,
+      'Visit Type': r.visitType, Status: r.status, 'Visit #': r.visitSequence,
+      Classification: classLabels[r.classification] || r.classification, Flagged: r.isFlagged ? 'Yes' : '',
+    }));
+    const csv = Papa.unparse(data);
+    const blob = new Blob([csv], { type: 'text/csv' });
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = `patient-review-${new Date().toISOString().slice(0, 10)}.csv`;
+    a.click();
+    toast.success('CSV exported');
+  };
+
+  return (
+    <div className="space-y-4">
+      {/* Header */}
+      <Card>
+        <CardHeader className="pb-3">
+          <CardTitle className="text-sm font-semibold flex items-center gap-2">
+            Patients Needing Review
+            <Badge variant="outline" className="text-base">{needsReviewCount}</Badge>
+          </CardTitle>
+          <CardDescription className="text-xs">
+            Operational flags for manual review — not clinical judgments.
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
+            {[
+              { label: 'Progression Gap', value: gapCount },
+              { label: 'Disruption-Heavy', value: disruptionCount },
+              { label: 'Repeat Reschedules', value: repeatResch },
+              { label: 'Repeat No-Shows', value: repeatNoShow },
+            ].map(s => (
+              <div key={s.label} className="p-2.5 rounded border bg-muted/30">
+                <div className="text-lg font-bold">{s.value}</div>
+                <div className="text-[10px] text-muted-foreground">{s.label}</div>
+              </div>
+            ))}
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* Classification chips */}
+      <div className="flex gap-1.5 flex-wrap">
+        {Object.entries(classCounts).map(([cls, count]) => (
+          <Badge
+            key={cls} variant="outline" className="cursor-pointer hover:bg-accent/50 text-[10px]"
+            onClick={() => {
+              if (cls === 'possible_progression_gap') setTab('progression_gap');
+              else if (cls === 'disruption_heavy') setTab('disruption_heavy');
+              else if (cls === 'maintenance_phase_only') setTab('maintenance');
+              else if (cls === 'quarter_boundary_unclear') setTab('quarter_boundary');
+              else setTab('all');
+              setPage(0);
+            }}
+          >
+            {classLabels[cls as CarePathClassification] || cls}: {count}
+          </Badge>
+        ))}
+      </div>
+
+      {/* Table */}
+      <Card>
+        <CardHeader className="pb-2">
+          <div className="flex items-center justify-between flex-wrap gap-3">
+            <CardTitle className="text-xs font-medium">Patient Operational Table</CardTitle>
+            <Button variant="outline" size="sm" onClick={exportCSV} className="gap-1 h-7 text-xs">
+              <Download className="h-3 w-3" /> Export CSV
+            </Button>
+          </div>
+        </CardHeader>
+        <CardContent className="space-y-3">
+          <Tabs value={tab} onValueChange={(v) => { setTab(v as TabFilter); setPage(0); }}>
+            <TabsList className="flex-wrap h-auto gap-0.5">
+              <TabsTrigger value="all" className="text-[10px] h-7">All ({journeys.length})</TabsTrigger>
+              <TabsTrigger value="needsreview" className="text-[10px] h-7">Needs Review ({needsReviewCount})</TabsTrigger>
+              <TabsTrigger value="progression_gap" className="text-[10px] h-7">Gap ({gapCount})</TabsTrigger>
+              <TabsTrigger value="disruption_heavy" className="text-[10px] h-7">Disruption ({disruptionCount})</TabsTrigger>
+              <TabsTrigger value="maintenance" className="text-[10px] h-7">Maintenance</TabsTrigger>
+              <TabsTrigger value="quarter_boundary" className="text-[10px] h-7">Quarter</TabsTrigger>
+            </TabsList>
+          </Tabs>
+          <div className="flex gap-2 flex-wrap">
+            <div className="relative flex-1 min-w-[180px]">
+              <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
+              <Input placeholder="Search patient or provider..." value={search}
+                onChange={e => { setSearch(e.target.value); setPage(0); }} className="pl-8 h-8 text-xs" />
+            </div>
+            <Select value={selectedProvider} onValueChange={v => { setSelectedProvider(v); setPage(0); }}>
+              <SelectTrigger className="w-[160px] h-8 text-xs"><SelectValue /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All Providers</SelectItem>
+                {allProviders.map(p => <SelectItem key={p} value={p}>{p}</SelectItem>)}
+              </SelectContent>
+            </Select>
+          </div>
+
+          <div className="text-[10px] text-muted-foreground">
+            {paginatedRows.length} of {flatRows.length} rows
+          </div>
+
+          <div className="rounded border overflow-auto max-h-[500px]">
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead className="cursor-pointer select-none text-[10px]" onClick={() => handleSort('patientName')}>Patient{sortArrow('patientName')}</TableHead>
+                  <TableHead className="cursor-pointer select-none text-[10px]" onClick={() => handleSort('provider')}>Provider{sortArrow('provider')}</TableHead>
+                  <TableHead className="cursor-pointer select-none text-[10px]" onClick={() => handleSort('date')}>Date{sortArrow('date')}</TableHead>
+                  <TableHead className="cursor-pointer select-none text-[10px]" onClick={() => handleSort('visitType')}>Visit Type{sortArrow('visitType')}</TableHead>
+                  <TableHead className="cursor-pointer select-none text-[10px]" onClick={() => handleSort('status')}>Status{sortArrow('status')}</TableHead>
+                  <TableHead className="text-[10px]">Visit #</TableHead>
+                  <TableHead className="text-[10px]">⚠</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {paginatedRows.map((row, i) => (
+                  <TableRow key={i}>
+                    <TableCell className="text-[10px] max-w-[100px] truncate">{row.patientName}</TableCell>
+                    <TableCell className="text-[10px]">{row.provider}</TableCell>
+                    <TableCell className="text-[10px] whitespace-nowrap">{row.date}</TableCell>
+                    <TableCell className="text-[10px] max-w-[120px] truncate">{row.visitType}</TableCell>
+                    <TableCell className="text-[10px]">{row.status}</TableCell>
+                    <TableCell className="text-[10px]">{row.visitSequence}</TableCell>
+                    <TableCell className="text-[10px]">
+                      {row.isFlagged && (
+                        <button onClick={() => setSelectedJourney(row.journey)}
+                          className="text-warning hover:text-warning/80 cursor-pointer" title="View details">
+                          <AlertTriangle className="h-3.5 w-3.5" />
+                        </button>
+                      )}
+                    </TableCell>
+                  </TableRow>
+                ))}
+                {paginatedRows.length === 0 && (
+                  <TableRow><TableCell colSpan={7} className="text-center py-6 text-muted-foreground text-xs">No rows match.</TableCell></TableRow>
+                )}
+              </TableBody>
+            </Table>
+          </div>
+
+          {totalPages > 1 && (
+            <div className="flex items-center justify-between">
+              <Button variant="outline" size="sm" disabled={page === 0} onClick={() => setPage(p => p - 1)} className="h-7 text-xs">
+                <ChevronLeft className="h-3 w-3 mr-1" /> Prev
+              </Button>
+              <span className="text-[10px] text-muted-foreground">Page {page + 1} / {totalPages}</span>
+              <Button variant="outline" size="sm" disabled={page >= totalPages - 1} onClick={() => setPage(p => p + 1)} className="h-7 text-xs">
+                Next <ChevronRight className="h-3 w-3 ml-1" />
+              </Button>
+            </div>
+          )}
+        </CardContent>
+      </Card>
+
+      {/* Flag Modal */}
+      {selectedJourney && (
+        <PatientFlagModal journey={selectedJourney} filters={activeFilters} onClose={() => setSelectedJourney(null)} onShowEvidence={() => { setSelectedJourney(null); navigate('/evidence'); }} />
+      )}
+    </div>
+  );
+}
+
+function PatientFlagModal({ journey, filters, onClose, onShowEvidence }: {
+  journey: PatientJourney; filters: any; onClose: () => void; onShowEvidence: () => void;
+}) {
+  const reasons: string[] = [];
+  const hasROF = journey.visits.some(v => containsAny(normalizeText(v.purposeRaw), filters.rofKeywords));
+  const hasActiveTx = journey.visits.some(v =>
+    containsAny(normalizeText(v.purposeRaw), filters.returnVisitKeywords) ||
+    (filters.tractionKeywords && containsAny(normalizeText(v.purposeRaw), filters.tractionKeywords)) ||
+    (filters.therapyKeywords && containsAny(normalizeText(v.purposeRaw), filters.therapyKeywords))
+  );
+  const rofVisit = journey.visits.find(v => containsAny(normalizeText(v.purposeRaw), filters.rofKeywords));
+
+  if (journey.classification === 'possible_progression_gap') {
+    if (hasROF && !hasActiveTx) {
+      reasons.push(`ROF completed on ${rofVisit?.date || 'unknown date'}. No active treatment visits found after ROF in this period.`);
+    } else if (hasROF) {
+      const scVisit = journey.visits.find(v => containsAny(normalizeText(v.purposeRaw), filters.supportiveCareKeywords));
+      if (scVisit && rofVisit) {
+        reasons.push(`ROF on ${rofVisit.date} was followed by Supportive Care on ${scVisit.date} with no active treatment visits between.`);
+      } else {
+        reasons.push(`ROF completed but patient moved to maintenance-style visits without active treatment phase.`);
+      }
+    }
+  }
+  if (journey.secondaryFlags.includes('disruption_heavy') || journey.disruptionCount >= 2) {
+    reasons.push(`${journey.disruptionCount} disruption events found (cancel/no-show/reschedule).`);
+  }
+  if (journey.classification === 'quarter_boundary_unclear') {
+    const endNote = rofVisit ? `ROF completed on ${rofVisit.date}, near report end.` : 'Milestone visit near end of period.';
+    reasons.push(`${endNote} Follow-through may occur next quarter.`);
+  }
+  if (journey.classification === 'maintenance_phase_only') {
+    reasons.push(`Only maintenance-style visits (SC/LTC) visible in this period.`);
+  }
+
+  const interpretation = (() => {
+    switch (journey.classification) {
+      case 'possible_progression_gap': return 'Possible progression gap — treatment path may not have continued as expected.';
+      case 'disruption_heavy': return 'Scheduling friction — repeated disruptions may indicate barriers to care.';
+      case 'quarter_boundary_unclear': return 'Quarter-boundary — follow-through may occur next quarter.';
+      case 'maintenance_phase_only': return 'Maintenance-phase patient — appears to be in SC/LTC continuation phase.';
+      default: return 'Visit pattern may warrant a manual review.';
+    }
+  })();
+
+  const suggestedAction = (() => {
+    switch (journey.classification) {
+      case 'possible_progression_gap': return 'Review manually to confirm whether treatment plan was completed before this period.';
+      case 'disruption_heavy': return 'Consider proactive outreach before next scheduled visit.';
+      case 'quarter_boundary_unclear': return 'Monitor only — no action needed if follow-through occurs next quarter.';
+      case 'maintenance_phase_only': return 'Confirm whether the SC/LTC transition was intentional.';
+      default: return 'Verify with provider whether visit-type labeling is accurate.';
+    }
+  })();
+
+  return (
+    <Dialog open onOpenChange={onClose}>
+      <DialogContent className="max-w-2xl max-h-[85vh] overflow-y-auto">
+        <DialogHeader>
+          <DialogTitle className="text-sm">Why {journey.patientName} is flagged</DialogTitle>
+        </DialogHeader>
+        <div className="space-y-4">
+          {/* Timeline */}
+          <div>
+            <h4 className="text-xs font-semibold mb-2">Visit Sequence</h4>
+            <div className="space-y-0.5">
+              {journey.visits.map((v, i) => {
+                const isROFv = containsAny(normalizeText(v.purposeRaw), filters.rofKeywords);
+                const isNP = containsAny(normalizeText(v.purposeRaw), filters.newPatientKeywords);
+                const isActiveTxV = containsAny(normalizeText(v.purposeRaw), filters.returnVisitKeywords) ||
+                  (filters.tractionKeywords && containsAny(normalizeText(v.purposeRaw), filters.tractionKeywords)) ||
+                  (filters.therapyKeywords && containsAny(normalizeText(v.purposeRaw), filters.therapyKeywords));
+                const isMaint = containsAny(normalizeText(v.purposeRaw), filters.supportiveCareKeywords) ||
+                  containsAny(normalizeText(v.purposeRaw), filters.ltcKeywords);
+                const isMilestone = isROFv || isNP || (i === 0 && isActiveTxV);
+
+                return (
+                  <div key={i} className={`flex items-center gap-2 py-1 px-2 rounded text-[10px] ${isMilestone ? 'bg-primary/5 font-medium' : ''}`}>
+                    <span className="font-mono w-[72px] shrink-0">{v.date}</span>
+                    <span className="w-[120px] truncate">{v.purposeRaw}</span>
+                    <span className="w-[80px] truncate text-muted-foreground">{v.provider}</span>
+                    <span className="text-muted-foreground">{v.statusRaw}</span>
+                    {isNP && <Badge variant="outline" className="text-[8px] h-4">NP</Badge>}
+                    {isROFv && <Badge variant="outline" className="text-[8px] h-4">ROF</Badge>}
+                    {isActiveTxV && <Badge variant="outline" className="text-[8px] h-4 bg-success/10 text-success border-success/30">Tx</Badge>}
+                    {isMaint && <Badge variant="outline" className="text-[8px] h-4 bg-warning/10 text-warning border-warning/30">Maint</Badge>}
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+
+          {/* Explanation */}
+          <div className="space-y-2 text-xs">
+            {reasons.length > 0 && (
+              <div>
+                <h4 className="font-semibold text-[11px] mb-1">Explanation</h4>
+                {reasons.map((r, i) => <p key={i} className="text-muted-foreground">{r}</p>)}
+              </div>
+            )}
+            <div>
+              <h4 className="font-semibold text-[11px] mb-1">Interpretation</h4>
+              <p className="text-muted-foreground">{interpretation}</p>
+            </div>
+            <div>
+              <h4 className="font-semibold text-[11px] mb-1">Suggested Next Step</h4>
+              <p className="text-muted-foreground">{suggestedAction}</p>
+            </div>
+          </div>
+
+          <Button variant="outline" size="sm" className="text-xs h-7 gap-1" onClick={onShowEvidence}>
+            Show source rows <ArrowRight className="h-3 w-3" />
+          </Button>
+        </div>
+      </DialogContent>
+    </Dialog>
+  );
+}

@@ -1,10 +1,10 @@
 import { createContext, useContext, useState, useMemo, ReactNode, useCallback } from 'react';
-import { useNavigate } from 'react-router-dom';
 import { toast } from 'sonner';
 import type {
   ParsedEndOfDay, ParsedCMR, DashboardFilters, DashboardMetrics,
-  EndOfDayAppointmentRow, CmrRow, CarePathAnalysisResult,
+  CarePathAnalysisResult,
 } from '@/types/reports';
+import type { EvidenceStore } from '@/types/evidence';
 import type { SequenceAnalysisResult } from '@/lib/kpi/analyzeSequences';
 import type { ValidationReport } from '@/lib/kpi/validateReport';
 import type { Insight } from '@/lib/kpi/generateInsights';
@@ -13,6 +13,7 @@ import { analyzeCarePathIntegrity } from '@/lib/kpi/analyzeCarePathIntegrity';
 import { analyzeSequences } from '@/lib/kpi/analyzeSequences';
 import { validateReport } from '@/lib/kpi/validateReport';
 import { generateInsights, DEFAULT_THRESHOLDS, type InsightThresholds } from '@/lib/kpi/generateInsights';
+import { buildEvidenceStore } from '@/lib/kpi/buildEvidenceStore';
 
 export interface Goals {
   rofRate: number;
@@ -36,6 +37,7 @@ interface DashboardContextValue {
   sequenceAnalysis: SequenceAnalysisResult | null;
   validationReport: ValidationReport | null;
   insights: Insight[];
+  evidenceStore: EvidenceStore;
   filters: DashboardFilters;
   activeFilters: DashboardFilters;
   goals: Goals;
@@ -136,10 +138,16 @@ export function DashboardProvider({ children }: { children: ReactNode }) {
     return generateInsights(metrics, carePathAnalysis, validationReport, thresholds);
   }, [metrics, carePathAnalysis, validationReport, thresholds]);
 
+  const evidenceStore = useMemo((): EvidenceStore => {
+    if (!metrics || !endOfDay || !cmr) return {};
+    return buildEvidenceStore(metrics, endOfDay, cmr, activeFilters, validationReport);
+  }, [metrics, endOfDay, cmr, activeFilters, validationReport]);
+
   const isLoaded = !!(endOfDay && cmr && metrics);
 
   const value: DashboardContextValue = {
     endOfDay, cmr, metrics, carePathAnalysis, sequenceAnalysis, validationReport, insights,
+    evidenceStore,
     filters, activeFilters, goals, thresholds, selectedProvider, weeksOverride,
     allProviders, calculatedWeeks, effectiveWeeks, isLoaded,
     setFilters, setGoals, setThresholds, setSelectedProvider, setWeeksOverride, loadData,
