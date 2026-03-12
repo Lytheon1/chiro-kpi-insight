@@ -1,5 +1,5 @@
-import { useState, useMemo } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useState, useMemo, useEffect } from 'react';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useDashboard } from '@/lib/context/DashboardContext';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -9,13 +9,13 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
-import { Download, ChevronLeft, ChevronRight, Search, AlertTriangle, ArrowRight } from 'lucide-react';
+import { Download, ChevronLeft, ChevronRight, Search, AlertTriangle, ArrowRight, X } from 'lucide-react';
 import { toast } from 'sonner';
 import Papa from 'papaparse';
 import { containsAny, normalizeText } from '@/lib/utils/normalize';
 import type { CarePathClassification, PatientJourney } from '@/types/reports';
 
-type TabFilter = 'all' | 'needsreview' | 'progression_gap' | 'disruption_heavy' | 'maintenance' | 'quarter_boundary';
+type TabFilter = 'all' | 'needsreview' | 'progression_gap' | 'disruption_heavy' | 'maintenance' | 'quarter_boundary' | 'repeat_reschedule';
 type SortKey = 'date' | 'patientName' | 'provider' | 'status' | 'visitType';
 const PAGE_SIZE = 50;
 
@@ -28,16 +28,42 @@ const classLabels: Record<CarePathClassification, string> = {
   needs_review: 'Needs Review',
 };
 
+const filterLabels: Record<TabFilter, string> = {
+  all: 'All',
+  needsreview: 'Needs Review',
+  progression_gap: 'Progression Gap',
+  disruption_heavy: 'Disruption-Heavy Patients',
+  maintenance: 'Maintenance',
+  quarter_boundary: 'Quarter-Boundary',
+  repeat_reschedule: 'Repeat-Rescheduled',
+};
+
 export default function PatientReviewPage() {
   const navigate = useNavigate();
+  const [searchParams, setSearchParams] = useSearchParams();
   const { carePathAnalysis, activeFilters, allProviders } = useDashboard();
-  const [tab, setTab] = useState<TabFilter>('all');
+  
+  // Read initial filter from URL
+  const urlFilter = searchParams.get('filter');
+  const initialTab: TabFilter = (urlFilter && urlFilter in filterLabels) ? urlFilter as TabFilter : 'all';
+  
+  const [tab, setTab] = useState<TabFilter>(initialTab);
   const [search, setSearch] = useState('');
   const [selectedProvider, setSelectedProvider] = useState('all');
   const [sortKey, setSortKey] = useState<SortKey>('patientName');
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('asc');
   const [page, setPage] = useState(0);
   const [selectedJourney, setSelectedJourney] = useState<PatientJourney | null>(null);
+  
+  // Sync URL filter changes
+  useEffect(() => {
+    const f = searchParams.get('filter');
+    if (f && f in filterLabels && f !== tab) {
+      setTab(f as TabFilter);
+      setPage(0);
+    }
+  }, [searchParams]);
+
 
   const journeys = carePathAnalysis?.journeys ?? [];
   const patientsNeedingReview = carePathAnalysis?.patientsNeedingReview ?? [];
