@@ -364,5 +364,11 @@ export function calculateDashboardMetrics(
     disruptionHeavyPatients,
     uniqueDisruptionPatients,
     totalDisruptionEvents: cmrRows.length,
+    // Operational context — massage and admin counts for workload visibility
+    massageScheduled,
+    massageCompleted,
+    adminScheduled,
+    adminCompleted,
+    visitTypeBreakdown,
   };
 }

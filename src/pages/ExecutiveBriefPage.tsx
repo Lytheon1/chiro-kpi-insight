@@ -154,6 +154,58 @@ export default function ExecutiveBriefPage() {
         )}
       </div>
 
+      {/* Operational Context — massage & admin included here for workload visibility */}
+      <Card>
+        <CardHeader className="pb-2">
+          <CardTitle className="text-sm font-semibold flex items-center gap-2">
+            Operational Context
+            <Popover>
+              <PopoverTrigger asChild>
+                <button className="text-muted-foreground hover:text-foreground transition-colors cursor-pointer">
+                  <HelpCircle className="h-4 w-4" />
+                </button>
+              </PopoverTrigger>
+              <PopoverContent className="w-[380px] text-xs space-y-2" side="right">
+                <h4 className="font-semibold text-sm">How denominators work</h4>
+                <p><strong>Operational Volume</strong> counts every scheduled row — this reflects total front-desk and staffing load.</p>
+                <p><strong>Clinical KPI Base</strong> excludes massage/therapy and phone/admin visits so retention and completion metrics reflect true chiropractic treatment opportunities.</p>
+              </PopoverContent>
+            </Popover>
+          </CardTitle>
+          <CardDescription className="text-xs">
+            Operational workload vs. clinical KPI base — massage and admin visits are excluded from chiropractic KPIs.
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <div className="grid gap-4 sm:grid-cols-2">
+            {/* Operational Volume */}
+            <div className="space-y-2">
+              <div className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Operational Volume</div>
+              <div className="space-y-1 text-sm">
+                <div className="flex justify-between"><span>Total Scheduled Rows</span><span className="font-semibold">{metrics.totalScheduled}</span></div>
+                <div className="flex justify-between"><span>Total Completed Rows</span><span className="font-semibold">{metrics.totalCompleted}</span></div>
+                <div className="flex justify-between text-muted-foreground"><span>↳ Massage / Therapy Visits</span><span>{metrics.massageScheduled} sched / {metrics.massageCompleted} completed</span></div>
+                <div className="flex justify-between text-muted-foreground"><span>↳ Phone / Admin Visits</span><span>{metrics.adminScheduled} sched / {metrics.adminCompleted} completed</span></div>
+              </div>
+            </div>
+            {/* Clinical KPI Base */}
+            <div className="space-y-2">
+              <div className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Clinical KPI Base</div>
+              <div className="space-y-1 text-sm">
+                <div className="flex justify-between"><span>Eligible Clinical Scheduled</span><span className="font-semibold">{metrics.scheduledNonMassage}</span></div>
+                <div className="flex justify-between"><span>Eligible Clinical Completed</span><span className="font-semibold">{metrics.completedNonMassage}</span></div>
+                <div className="flex justify-between"><span>Retention Rate</span><span className="font-semibold">{retentionRatePct}%</span></div>
+              </div>
+              <div className="text-[10px] text-muted-foreground pt-1 border-t space-y-0.5">
+                <div>Excluded from this KPI:</div>
+                <div>• Massage / Therapy: {metrics.massageScheduled} visits</div>
+                <div>• Phone / Admin: {metrics.adminScheduled} visits</div>
+              </div>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
+
       {/* Disruption Cards */}
       <Card>
         <CardHeader className="pb-2">
