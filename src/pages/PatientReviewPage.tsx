@@ -94,6 +94,10 @@ export default function PatientReviewPage() {
       case 'disruption_heavy': jList = journeys.filter(j => j.secondaryFlags.includes('disruption_heavy')); break;
       case 'maintenance': jList = journeys.filter(j => j.classification === 'maintenance_phase_only'); break;
       case 'quarter_boundary': jList = journeys.filter(j => j.classification === 'quarter_boundary_unclear'); break;
+      case 'repeat_reschedule': jList = journeys.filter(j => {
+        const rs = j.visits.filter(v => containsAny(normalizeText(v.statusRaw), activeFilters.rescheduledKeywords)).length;
+        return rs >= 2;
+      }); break;
     }
     if (selectedProvider !== 'all') jList = jList.filter(j => j.provider === selectedProvider);
     if (search.trim()) {
@@ -121,7 +125,7 @@ export default function PatientReviewPage() {
       return sortDir === 'asc' ? cmp : -cmp;
     });
     return rows;
-  }, [journeys, patientsNeedingReview, tab, selectedProvider, search, sortKey, sortDir]);
+  }, [journeys, patientsNeedingReview, tab, selectedProvider, search, sortKey, sortDir, activeFilters]);
 
   if (!carePathAnalysis) {
     return <Card><CardContent className="py-8 text-center text-muted-foreground text-sm">Upload reports to see patient data.</CardContent></Card>;
