@@ -28,6 +28,7 @@ export interface Goals {
   retentionRate: number;
   quarterlyKept: number;
   weeklyKept: number;
+  avgVisitValue: number;
 }
 
 const defaultGoals: Goals = {
@@ -35,6 +36,7 @@ const defaultGoals: Goals = {
   retentionRate: 84,
   quarterlyKept: 390,
   weeklyKept: 30,
+  avgVisitValue: 120,
 };
 
 interface DashboardContextValue {
