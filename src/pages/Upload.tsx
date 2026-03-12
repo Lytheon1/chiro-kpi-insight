@@ -18,6 +18,29 @@ const Upload = () => {
     navigate('/executive-brief');
   };
 
+  const handleAutoLoad = async () => {
+    try {
+      const [resA, resB] = await Promise.all([
+        fetch('/test-data/A.xls'),
+        fetch('/test-data/Cancel_Missed_RS.xls'),
+      ]);
+      const blobA = await resA.blob();
+      const blobB = await resB.blob();
+      const fileA = new File([blobA], 'A.xls', { type: blobA.type });
+      const fileB = new File([blobB], 'Cancel_Missed_RS.xls', { type: blobB.type });
+
+      const { parseEndOfDayAppointments } = await import('@/lib/parsers/parseEndOfDayAppointments');
+      const { parseCanceledMissedRescheduled } = await import('@/lib/parsers/parseCanceledMissedRescheduled');
+
+      const endOfDay = await parseEndOfDayAppointments(fileA);
+      const cmr = await parseCanceledMissedRescheduled(fileB);
+      handleReportsParsed(endOfDay, cmr);
+    } catch (e: any) {
+      toast.error('Auto-load failed: ' + e.message);
+      console.error(e);
+    }
+  };
+
   return (
     <div className="min-h-screen bg-background">
       <div className="container mx-auto px-4 py-8 max-w-4xl">
@@ -29,6 +52,12 @@ const Upload = () => {
           </p>
         </div>
         <DualReportUploader onReportsParsed={handleReportsParsed} />
+        {/* DEV: Auto-load test data */}
+        <div className="mt-4 text-center">
+          <button onClick={handleAutoLoad} className="text-xs text-muted-foreground underline">
+            [Dev] Auto-load test data
+          </button>
+        </div>
       </div>
     </div>
   );
