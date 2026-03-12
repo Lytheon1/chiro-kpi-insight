@@ -25,6 +25,8 @@ export const DEFAULT_FILTERS: DashboardFilters = {
   supportiveCareKeywords: ["supportive care", "sc"],
   ltcKeywords: ["long-term care", "long term care", "ltc"],
   excludedPurposeKeywords: [],
+  tractionKeywords: ["traction", "spinal decompression", "decompression"],
+  therapyKeywords: ["therapy", "physical therapy", "pt", "e-stim", "ultrasound"],
 };
 
 export function calculateDashboardMetrics(

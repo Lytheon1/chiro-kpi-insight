@@ -107,6 +107,8 @@ export interface DashboardFilters {
   ptfKeywords: string[];
   supportiveCareKeywords: string[];
   ltcKeywords: string[];
+  tractionKeywords?: string[];
+  therapyKeywords?: string[];
   weeksOverride?: number;
 }
 
