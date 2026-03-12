@@ -11,6 +11,8 @@ import OperationalAnalysisPage from "./pages/OperationalAnalysisPage";
 import PatientReviewPage from "./pages/PatientReviewPage";
 import ValidationPage from "./pages/ValidationPage";
 import EvidencePage from "./pages/EvidencePage";
+import PatientFlowPage from "./pages/PatientFlowPage";
+import PatientsAtRiskPage from "./pages/PatientsAtRiskPage";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -26,6 +28,8 @@ const App = () => (
             <Route path="/" element={<Upload />} />
             <Route element={<DashboardLayout />}>
               <Route path="/executive-brief" element={<ExecutiveBriefPage />} />
+              <Route path="/patient-flow" element={<PatientFlowPage />} />
+              <Route path="/patients-at-risk" element={<PatientsAtRiskPage />} />
               <Route path="/analysis" element={<OperationalAnalysisPage />} />
               <Route path="/patients" element={<PatientReviewPage />} />
               <Route path="/validation" element={<ValidationPage />} />
