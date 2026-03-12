@@ -180,32 +180,62 @@ export default function ExecutiveBriefPage() {
           </Card>
         )}
 
-        {revenueMetrics && revenueMetrics.estimatedCancellationLeakage > 0 && (
+        {revenueMetrics && revenueMetrics.canceledCount > 0 && (
           <Card>
             <CardHeader className="pb-2">
               <CardTitle className="text-[13px] font-semibold text-primary">Revenue Intelligence</CardTitle>
             </CardHeader>
-            <CardContent>
-              <div className="flex gap-6 mb-3">
-                <div>
-                  <div className="revenue-value">{fmt$(revenueMetrics.totalPostedCharges ?? 0)}</div>
-                  <div className="text-[11px] text-muted-foreground">Total Posted Charges</div>
-                  <div className="text-[10px] text-faint">{metrics.totalCompleted} visits × avg {fmt$(revenueMetrics.avgChargePerCompleted)}/visit</div>
+            <CardContent className="space-y-3">
+              {/* Weekly leakage — the headline number */}
+              <div className="p-3 rounded-lg bg-destructive/5 border border-destructive/20">
+                <div className="text-[10px] text-faint font-medium tracking-wide mb-1">WEEKLY REVENUE WALKING OUT THE DOOR</div>
+                <div className="font-display text-3xl text-destructive">
+                  ~{fmt$(revenueMetrics.weeklyLeakage)}<span className="text-base text-muted-foreground">/week</span>
                 </div>
-                <div>
-                  <div className="revenue-value text-destructive">{fmt$(revenueMetrics.estimatedCancellationLeakage)}</div>
-                  <div className="text-[11px] text-muted-foreground">Est. Leakage (Canceled)</div>
-                  <div className="text-[10px] text-faint">{revenueMetrics.canceledCount} canceled × {fmt$(revenueMetrics.avgChargePerCompleted)} avg</div>
+                <div className="text-[11px] text-muted-foreground mt-0.5">
+                  ~{revenueMetrics.weeklyLeakageVisits} canceled visits/week × ${revenueMetrics.configuredAvgVisitValue} avg visit
                 </div>
               </div>
+
+              <div className="flex gap-6">
+                <div>
+                  <div className="revenue-value text-destructive">{fmt$(revenueMetrics.estimatedCancellationLeakage)}</div>
+                  <div className="text-[11px] text-muted-foreground">Est. Quarterly Leakage</div>
+                  <div className="text-[10px] text-faint">{revenueMetrics.canceledCount} canceled × ${revenueMetrics.configuredAvgVisitValue} avg</div>
+                </div>
+                <div>
+                  <div className="revenue-value">{fmt$(revenueMetrics.totalPostedCharges)}</div>
+                  <div className="text-[11px] text-muted-foreground">Total Posted Charges</div>
+                  <div className="text-[10px] text-faint">{revenueMetrics.completedVisitCount} completed visits</div>
+                </div>
+              </div>
+
+              {/* Lifetime Opportunity */}
+              {revenueMetrics.lifetimeOpportunity.totalLostPatients > 0 && (
+                <div className="p-3 rounded-lg bg-warning/5 border border-warning/20">
+                  <div className="text-[10px] text-faint font-medium tracking-wide mb-1">ANNUAL OPPORTUNITY FROM PATIENT RETENTION</div>
+                  <div className="font-display text-2xl text-warning">
+                    ~{fmt$(revenueMetrics.lifetimeOpportunity.estimatedAnnualLoss)}
+                    <span className="text-xs text-muted-foreground font-sans ml-1">/year</span>
+                  </div>
+                  <div className="text-[11px] text-muted-foreground mt-1">
+                    {revenueMetrics.lifetimeOpportunity.totalLostPatients} patients/quarter drop out before completing care
+                  </div>
+                  <div className="text-[10px] text-faint mt-0.5">
+                    Range: {fmt$(revenueMetrics.lifetimeOpportunity.estimatedAnnualLossLow)} – {fmt$(revenueMetrics.lifetimeOpportunity.estimatedAnnualLossHigh)} depending on payer mix
+                  </div>
+                </div>
+              )}
+
               {revenueMetrics.additionalRofPatients > 0 && (
                 <div className="text-[11px] text-muted-foreground p-2.5 rounded bg-success/5 border border-success/20">
                   <TrendingUp className="h-3 w-3 inline mr-1 text-success" />
                   If NP→ROF improved to 75%: +~{fmt$(revenueMetrics.estimatedAdditionalRevenue)} estimated
                 </div>
               )}
-              <div className="text-[10px] text-faint mt-2 italic">
-                Revenue estimates based on posted charges. Actual collections vary with insurance adjustments.
+              <div className="text-[10px] text-faint italic">
+                Leakage uses configurable avg visit value (${revenueMetrics.configuredAvgVisitValue}). 
+                Posted charges from report may include plan totals. Adjust in Settings.
               </div>
             </CardContent>
           </Card>
