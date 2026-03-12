@@ -1,10 +1,10 @@
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import { useDashboard } from '@/lib/context/DashboardContext';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
-import { Info } from 'lucide-react';
+import { Info, X } from 'lucide-react';
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid,
   Tooltip as RechartsTooltip, ResponsiveContainer,
@@ -16,7 +16,7 @@ import { RescheduleInsights } from '@/components/dashboard/RescheduleInsights';
 import { ReasonBreakdown } from '@/components/dashboard/ReasonBreakdown';
 import { ConfidenceBadge } from '@/components/ConfidenceBadge';
 import { containsAny, normalizeText } from '@/lib/utils/normalize';
-import { getProviderColor, isSingleProviderMode } from '@/lib/utils/providerColors';
+import { isSingleProviderMode } from '@/lib/utils/providerColors';
 import type { EndOfDayAppointmentRow, CmrRow } from '@/types/reports';
 
 const truncate = (s: string, max: number) => s.length > max ? s.slice(0, max) + '…' : s;
@@ -45,8 +45,69 @@ const FUNNEL_COLORS = [
   'hsl(220, 20%, 72%)',
 ];
 
+// ─── Patient List Panel (inline drilldown for chart bar clicks) ──────────────
+interface PatientListEntry {
+  name: string;
+  provider: string;
+  date?: string;
+  detail?: string;
+}
+
+function PatientListPanel({ label, patients, onClose }: {
+  label: string;
+  patients: PatientListEntry[];
+  onClose: () => void;
+}) {
+  return (
+    <Card className="border-secondary/40 bg-secondary/[0.02]">
+      <CardHeader className="pb-2">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <Badge variant="secondary" className="text-xs gap-1.5 py-1">
+              {label}
+              <button onClick={onClose} className="hover:text-destructive ml-0.5">
+                <X className="h-3 w-3" />
+              </button>
+            </Badge>
+            <span className="text-[10px] text-muted-foreground">
+              {patients.length} patients · Patient-level
+            </span>
+          </div>
+        </div>
+      </CardHeader>
+      <CardContent>
+        <div className="rounded border overflow-auto max-h-[300px]">
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead className="text-[10px]">Patient</TableHead>
+                <TableHead className="text-[10px]">Provider</TableHead>
+                <TableHead className="text-[10px]">Date</TableHead>
+                {patients.some(p => p.detail) && <TableHead className="text-[10px]">Detail</TableHead>}
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {patients.map((p, i) => (
+                <TableRow key={i}>
+                  <TableCell className="text-[10px] font-medium">{p.name}</TableCell>
+                  <TableCell className="text-[10px]">{p.provider}</TableCell>
+                  <TableCell className="text-[10px]">{p.date || '—'}</TableCell>
+                  {patients.some(pp => pp.detail) && <TableCell className="text-[10px] text-muted-foreground">{p.detail || '—'}</TableCell>}
+                </TableRow>
+              ))}
+              {patients.length === 0 && (
+                <TableRow><TableCell colSpan={4} className="text-center py-4 text-muted-foreground text-xs">No patients.</TableCell></TableRow>
+              )}
+            </TableBody>
+          </Table>
+        </div>
+      </CardContent>
+    </Card>
+  );
+}
+
 // ─── Custom NP Next Step Tooltip ────────────────────────────────────────────
-function NPNextStepTooltip({ active, payload, totalNP }: any) {
+function NPNextStepTooltip({ active, payload }: any) {
   if (!active || !payload || !payload.length) return null;
   const data = payload[0]?.payload;
   if (!data) return null;
@@ -60,6 +121,7 @@ function NPNextStepTooltip({ active, payload, totalNP }: any) {
       {data.note && (
         <div className="text-[10px] text-muted-foreground mt-1 italic">{data.note}</div>
       )}
+      <div className="text-[10px] text-secondary mt-1">Click bar to see patients</div>
     </div>
   );
 }
@@ -67,6 +129,8 @@ function NPNextStepTooltip({ active, payload, totalNP }: any) {
 export default function OperationalAnalysisPage() {
   const { metrics, carePathAnalysis, sequenceAnalysis, activeFilters, endOfDay, cmr, goals, validationReport, allProviders } = useDashboard();
   const [drilldownWeek, setDrilldownWeek] = useState<string | null>(null);
+  const [npDrilldown, setNpDrilldown] = useState<{ label: string; patients: PatientListEntry[] } | null>(null);
+  const [rofDrilldown, setRofDrilldown] = useState<{ label: string; patients: PatientListEntry[] } | null>(null);
 
   const singleProvider = isSingleProviderMode(allProviders);
 
@@ -116,11 +180,41 @@ export default function OperationalAnalysisPage() {
     setDrilldownWeek(drilldownWeek === week ? null : week);
   };
 
-  // Provider colors for bar charts
-  const reschByProviderWithColor = metrics.rescheduledByProvider.map(d => ({
-    ...d,
-    fill: getProviderColor(d.provider),
-  }));
+  // Handle NP next-step bar click
+  const handleNpBarClick = (data: any) => {
+    if (!data || !sequenceAnalysis) return;
+    const category = data.category || data.activeLabel;
+    const step = sequenceAnalysis.npNextSteps.find(s => s.category === category);
+    if (!step) return;
+    setNpDrilldown({
+      label: `NP → ${step.category} (${step.count} patients)`,
+      patients: step.patients.map(p => ({
+        name: p.name,
+        provider: p.provider,
+        date: p.npDate,
+        detail: p.nextType ? `→ ${p.nextType} on ${p.nextDate}` : 'No next visit',
+      })),
+    });
+    setRofDrilldown(null);
+  };
+
+  // Handle ROF path bar click
+  const handleRofBarClick = (data: any) => {
+    if (!data || !sequenceAnalysis) return;
+    const path = data.path || data.activeLabel;
+    const entry = sequenceAnalysis.rofPaths.find(s => s.path === path);
+    if (!entry) return;
+    setRofDrilldown({
+      label: `${entry.path} (${entry.count} patients)`,
+      patients: entry.patients.map(p => ({
+        name: p.name,
+        provider: p.provider,
+        date: p.rofDate,
+        detail: [p.visit1, p.visit2].filter(Boolean).join(' → ') || 'No next visit',
+      })),
+    });
+    setNpDrilldown(null);
+  };
 
   return (
     <div className="space-y-6">
@@ -155,7 +249,7 @@ export default function OperationalAnalysisPage() {
         </Card>
       )}
 
-      {/* Provider Comparison — only show table when multiple providers */}
+      {/* Provider Comparison */}
       {!singleProvider && (
         <ProviderComparisonTable
           carePathMetrics={carePathAnalysis.providerMetrics}
@@ -164,10 +258,9 @@ export default function OperationalAnalysisPage() {
         />
       )}
 
-      {/* Care Path */}
       <CarePathSection analysis={carePathAnalysis} />
 
-      {/* NP Next Step */}
+      {/* NP Next Step — clickable bars */}
       {sequenceAnalysis && sequenceAnalysis.npNextSteps.length > 0 && (
         <Card>
           <CardHeader className="pb-2">
@@ -176,9 +269,7 @@ export default function OperationalAnalysisPage() {
               <Tooltip>
                 <TooltipTrigger><Info className="h-3.5 w-3.5 text-muted-foreground" /></TooltipTrigger>
                 <TooltipContent className="max-w-xs text-xs">
-                  Shows the next <strong>meaningful</strong> visit step after a New Patient visit.
-                  Duplicate or disrupted scheduling rows are handled separately.
-                  ROF is the expected next step.
+                  Click any bar to see the exact patients behind that count. ROF is the expected next step.
                 </TooltipContent>
               </Tooltip>
             </CardTitle>
@@ -189,23 +280,32 @@ export default function OperationalAnalysisPage() {
                   {sequenceAnalysis.unexpectedNextStepCount} ({(sequenceAnalysis.unexpectedNextStepPct * 100).toFixed(0)}%) unexpected next step.
                 </span>
               )}
-              {sequenceAnalysis.duplicateNPCount > 0 && (
-                <span className="text-muted-foreground ml-1">
-                  {sequenceAnalysis.duplicateNPCount} duplicate/rebooked NP rows excluded.
-                </span>
-              )}
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-3">
             <ResponsiveContainer width="100%" height={Math.max(160, sequenceAnalysis.npNextSteps.length * 32)}>
-              <BarChart data={sequenceAnalysis.npNextSteps} layout="vertical" margin={{ left: 200, right: 10 }}>
+              <BarChart
+                data={sequenceAnalysis.npNextSteps}
+                layout="vertical"
+                margin={{ left: 200, right: 10 }}
+                onClick={(e) => e?.activePayload?.[0]?.payload && handleNpBarClick(e.activePayload[0].payload)}
+              >
                 <CartesianGrid strokeDasharray="3 3" className="stroke-muted" horizontal={false} />
                 <XAxis type="number" className="text-[10px]" />
                 <YAxis type="category" dataKey="category" width={190} tick={<CustomTick />} />
-                <RechartsTooltip content={<NPNextStepTooltip totalNP={sequenceAnalysis.totalNPPatients} />} />
-                <Bar dataKey="count" fill="hsl(var(--primary))" radius={[0, 3, 3, 0]} name="Patients" />
+                <RechartsTooltip content={<NPNextStepTooltip />} />
+                <Bar dataKey="count" fill="hsl(var(--primary))" radius={[0, 3, 3, 0]} name="Patients" cursor="pointer" />
               </BarChart>
             </ResponsiveContainer>
+
+            {/* NP drilldown panel */}
+            {npDrilldown && (
+              <PatientListPanel
+                label={npDrilldown.label}
+                patients={npDrilldown.patients}
+                onClose={() => setNpDrilldown(null)}
+              />
+            )}
 
             {/* Companion data table */}
             <div className="rounded border overflow-auto">
@@ -220,7 +320,11 @@ export default function OperationalAnalysisPage() {
                 </TableHeader>
                 <TableBody>
                   {sequenceAnalysis.npNextSteps.map(s => (
-                    <TableRow key={s.category}>
+                    <TableRow
+                      key={s.category}
+                      className="cursor-pointer hover:bg-accent/30"
+                      onClick={() => handleNpBarClick(s)}
+                    >
                       <TableCell className="text-[10px] font-medium">{s.category}</TableCell>
                       <TableCell className="text-[10px] text-right">{s.count}</TableCell>
                       <TableCell className="text-[10px] text-right">{(s.pctOfCohort * 100).toFixed(1)}%</TableCell>
@@ -232,9 +336,7 @@ export default function OperationalAnalysisPage() {
             </div>
 
             <div className="text-[10px] text-muted-foreground p-2.5 rounded bg-muted/50 border">
-              This chart reflects the next meaningful visit step after a New Patient visit.
-              Duplicate or disrupted scheduling rows are handled separately.
-              "Disruption Before ROF" patients still reached ROF but had canceled/rescheduled events first.
+              Click any bar or table row to see the exact patients. "Disruption Before ROF" patients still reached ROF but had canceled/rescheduled events first.
             </div>
 
             <InsightBlock
@@ -247,7 +349,7 @@ export default function OperationalAnalysisPage() {
         </Card>
       )}
 
-      {/* ROF Next 2 */}
+      {/* ROF Next 2 — clickable bars */}
       {sequenceAnalysis && sequenceAnalysis.rofPaths.length > 0 && (
         <Card>
           <CardHeader className="pb-2">
@@ -256,26 +358,43 @@ export default function OperationalAnalysisPage() {
               <Tooltip>
                 <TooltipTrigger><Info className="h-3.5 w-3.5 text-muted-foreground" /></TooltipTrigger>
                 <TooltipContent className="max-w-xs text-xs">
-                  Shows the next 2 completed visits after ROF. Canceled/no-show visits are skipped.
+                  Click any bar to see the patients behind it. Shows the next 2 completed visits after ROF.
                 </TooltipContent>
               </Tooltip>
             </CardTitle>
             <CardDescription className="text-xs">{sequenceAnalysis.totalROFPatients} ROF patients tracked.</CardDescription>
           </CardHeader>
           <CardContent className="space-y-3">
-            <div className="min-w-[680px]">
-              <ResponsiveContainer width="100%" height={Math.max(200, sequenceAnalysis.rofPaths.length * 32)}>
-                <BarChart data={sequenceAnalysis.rofPaths} layout="vertical" margin={{ left: 240, right: 20 }}>
-                  <CartesianGrid strokeDasharray="3 3" className="stroke-muted" horizontal={false} />
-                  <XAxis type="number" className="text-[10px]" />
-                  <YAxis type="category" dataKey="path" width={230} tick={<CustomTick />} />
-                  <RechartsTooltip contentStyle={tooltipStyle} />
-                  <Bar dataKey="count" fill="hsl(var(--secondary))" radius={[0, 3, 3, 0]} name="Patients" />
-                </BarChart>
-              </ResponsiveContainer>
+            <div className="overflow-x-auto">
+              <div className="min-w-[680px]">
+                <ResponsiveContainer width="100%" height={Math.max(200, sequenceAnalysis.rofPaths.length * 32)}>
+                  <BarChart
+                    data={sequenceAnalysis.rofPaths}
+                    layout="vertical"
+                    margin={{ left: 240, right: 20 }}
+                    onClick={(e) => e?.activePayload?.[0]?.payload && handleRofBarClick(e.activePayload[0].payload)}
+                  >
+                    <CartesianGrid strokeDasharray="3 3" className="stroke-muted" horizontal={false} />
+                    <XAxis type="number" className="text-[10px]" />
+                    <YAxis type="category" dataKey="path" width={230} tick={<CustomTick />} />
+                    <RechartsTooltip contentStyle={tooltipStyle} />
+                    <Bar dataKey="count" fill="hsl(var(--secondary))" radius={[0, 3, 3, 0]} name="Patients" cursor="pointer" />
+                  </BarChart>
+                </ResponsiveContainer>
+              </div>
             </div>
+
+            {/* ROF drilldown panel */}
+            {rofDrilldown && (
+              <PatientListPanel
+                label={rofDrilldown.label}
+                patients={rofDrilldown.patients}
+                onClose={() => setRofDrilldown(null)}
+              />
+            )}
+
             <div className="text-[10px] text-muted-foreground p-2.5 rounded bg-muted/50 border">
-              Patients who moved from ROF into a maintenance-style visit without visible active treatment
+              Click any bar to see the patient list. Patients who moved from ROF into maintenance without visible active treatment
               may reflect a complete prior plan or an early maintenance transition — review manually.
             </div>
           </CardContent>

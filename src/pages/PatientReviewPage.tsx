@@ -9,7 +9,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
-import { Download, ChevronLeft, ChevronRight, Search, AlertTriangle, ArrowRight, X } from 'lucide-react';
+import { Download, ChevronLeft, ChevronRight, Search, AlertTriangle, ArrowRight, X, Eye, List } from 'lucide-react';
 import { toast } from 'sonner';
 import Papa from 'papaparse';
 import { containsAny, normalizeText } from '@/lib/utils/normalize';
@@ -17,6 +17,7 @@ import type { CarePathClassification, PatientJourney } from '@/types/reports';
 
 type TabFilter = 'all' | 'needsreview' | 'progression_gap' | 'disruption_heavy' | 'maintenance' | 'quarter_boundary' | 'repeat_reschedule';
 type SortKey = 'date' | 'patientName' | 'provider' | 'status' | 'visitType';
+type EvidenceMode = 'evidence' | 'full_journey';
 const PAGE_SIZE = 50;
 
 const classLabels: Record<CarePathClassification, string> = {
@@ -38,15 +39,27 @@ const filterLabels: Record<TabFilter, string> = {
   repeat_reschedule: 'Repeat-Rescheduled',
 };
 
+/** Check if a row is a disruption event */
+function isDisruptionRow(statusRaw: string, cancelKw: string[], noShowKw: string[], reschKw: string[]): boolean {
+  const s = normalizeText(statusRaw);
+  return containsAny(s, cancelKw) || containsAny(s, noShowKw) || containsAny(s, reschKw);
+}
+
+/** Check if a row is a milestone (NP, ROF, Re-Exam, SC, LTC) */
+function isMilestoneRow(purposeRaw: string): boolean {
+  const p = purposeRaw.toLowerCase();
+  return p.includes('new patient') || p.includes('rof') || p.includes('report of findings') ||
+    p.includes('re-exam') || p.includes('supportive care') || p.includes('ltc');
+}
+
 export default function PatientReviewPage() {
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
   const { carePathAnalysis, cmr, activeFilters, allProviders } = useDashboard();
-  
-  // Read initial filter from URL
+
   const urlFilter = searchParams.get('filter');
   const initialTab: TabFilter = (urlFilter && urlFilter in filterLabels) ? urlFilter as TabFilter : 'all';
-  
+
   const [tab, setTab] = useState<TabFilter>(initialTab);
   const [search, setSearch] = useState('');
   const [selectedProvider, setSelectedProvider] = useState('all');
@@ -54,8 +67,8 @@ export default function PatientReviewPage() {
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('asc');
   const [page, setPage] = useState(0);
   const [selectedJourney, setSelectedJourney] = useState<PatientJourney | null>(null);
-  
-  // Sync URL filter changes
+  const [evidenceMode, setEvidenceMode] = useState<EvidenceMode>('evidence');
+
   useEffect(() => {
     const f = searchParams.get('filter');
     if (f && f in filterLabels && f !== tab) {
@@ -63,7 +76,6 @@ export default function PatientReviewPage() {
       setPage(0);
     }
   }, [searchParams]);
-
 
   const journeys = carePathAnalysis?.journeys ?? [];
   const patientsNeedingReview = carePathAnalysis?.patientsNeedingReview ?? [];
@@ -77,11 +89,10 @@ export default function PatientReviewPage() {
   const needsReviewCount = patientsNeedingReview.length;
   const gapCount = journeys.filter(j => j.classification === 'possible_progression_gap').length;
   const disruptionCount = journeys.filter(j => j.secondaryFlags.includes('disruption_heavy')).length;
-  // Build repeat-rescheduled patients from Report B (CMR) data
+
   const repeatReschedulePatients = useMemo(() => {
     if (!cmr) return { names: new Set<string>(), rows: [] as typeof cmr.rows };
     const reschKeywords = activeFilters.rescheduledKeywords;
-    // Group CMR rows by patient name, filter for rescheduled status
     const byPatient = new Map<string, typeof cmr.rows>();
     for (const row of cmr.rows) {
       if (!row.patientName) continue;
@@ -91,7 +102,6 @@ export default function PatientReviewPage() {
       if (!byPatient.has(key)) byPatient.set(key, []);
       byPatient.get(key)!.push(row);
     }
-    // Keep only patients with 2+ reschedule events
     const names = new Set<string>();
     const rows: typeof cmr.rows = [];
     for (const [key, pRows] of byPatient) {
@@ -110,8 +120,9 @@ export default function PatientReviewPage() {
     return ns >= 2;
   }).length, [journeys, activeFilters]);
 
+  // ─── Evidence-aware row building ────────────────────────────────────────────
   const flatRows = useMemo(() => {
-    // For repeat_reschedule tab, build rows from CMR data instead of journeys
+    // For repeat_reschedule tab, build rows from CMR data
     if (tab === 'repeat_reschedule') {
       let cmrRows = repeatReschedulePatients.rows;
       if (selectedProvider !== 'all') cmrRows = cmrRows.filter(r => r.provider === selectedProvider);
@@ -133,6 +144,7 @@ export default function PatientReviewPage() {
         journey: null as any,
         visitSequence: 0,
         isFlagged: true,
+        isEvidenceRow: true,
       }));
       rows.sort((a, b) => {
         let cmp = 0;
@@ -161,16 +173,34 @@ export default function PatientReviewPage() {
       const q = search.toLowerCase();
       jList = jList.filter(j => j.patientName.toLowerCase().includes(q) || j.provider.toLowerCase().includes(q));
     }
+
     const rows = jList.flatMap(j =>
-      j.visits.map(v => ({
-        patientName: j.patientName, provider: v.provider, date: v.date,
-        visitType: v.purposeRaw, status: v.statusRaw,
-        classification: j.classification, secondaryFlags: j.secondaryFlags, journey: j,
-        visitSequence: j.visits.indexOf(v) + 1,
-        isFlagged: j.classification === 'possible_progression_gap' || j.secondaryFlags.includes('disruption_heavy'),
-      }))
+      j.visits.map(v => {
+        // Determine if this row is evidence for the current filter
+        let isEvidenceRow = true; // default: show all for 'all' tab
+        if (tab === 'disruption_heavy') {
+          isEvidenceRow = isDisruptionRow(v.statusRaw, activeFilters.canceledKeywords, activeFilters.noShowKeywords, activeFilters.rescheduledKeywords);
+        } else if (tab === 'progression_gap') {
+          isEvidenceRow = isMilestoneRow(v.purposeRaw);
+        }
+
+        return {
+          patientName: j.patientName, provider: v.provider, date: v.date,
+          visitType: v.purposeRaw, status: v.statusRaw,
+          classification: j.classification, secondaryFlags: j.secondaryFlags, journey: j,
+          visitSequence: j.visits.indexOf(v) + 1,
+          isFlagged: j.classification === 'possible_progression_gap' || j.secondaryFlags.includes('disruption_heavy'),
+          isEvidenceRow,
+        };
+      })
     );
-    rows.sort((a, b) => {
+
+    // In evidence mode, filter to only evidence rows (for disruption/gap tabs)
+    const filtered = (evidenceMode === 'evidence' && (tab === 'disruption_heavy' || tab === 'progression_gap'))
+      ? rows.filter(r => r.isEvidenceRow)
+      : rows;
+
+    filtered.sort((a, b) => {
       let cmp = 0;
       switch (sortKey) {
         case 'date': cmp = a.date.localeCompare(b.date); break;
@@ -181,9 +211,14 @@ export default function PatientReviewPage() {
       }
       return sortDir === 'asc' ? cmp : -cmp;
     });
-    return rows;
-  }, [journeys, patientsNeedingReview, tab, selectedProvider, search, sortKey, sortDir, activeFilters, repeatReschedulePatients]);
+    return filtered;
+  }, [journeys, patientsNeedingReview, tab, selectedProvider, search, sortKey, sortDir, activeFilters, repeatReschedulePatients, evidenceMode]);
 
+  // Unique patient count for current view
+  const uniquePatientCount = useMemo(() => {
+    const names = new Set(flatRows.map(r => r.patientName.toLowerCase()));
+    return names.size;
+  }, [flatRows]);
 
   if (!carePathAnalysis) {
     return <Card><CardContent className="py-8 text-center text-muted-foreground text-sm">Upload reports to see patient data.</CardContent></Card>;
@@ -197,6 +232,20 @@ export default function PatientReviewPage() {
     else { setSortKey(key); setSortDir('asc'); }
   };
   const sortArrow = (key: SortKey) => sortKey === key ? (sortDir === 'asc' ? ' ↑' : ' ↓') : '';
+
+  const handleSummaryClick = (filter: TabFilter) => {
+    setTab(filter);
+    setPage(0);
+    setEvidenceMode('evidence');
+    setSearchParams({ filter });
+  };
+
+  const clearFilter = () => {
+    setTab('all');
+    setSearchParams({});
+    setPage(0);
+    setEvidenceMode('evidence');
+  };
 
   const exportCSV = () => {
     const data = flatRows.map(r => ({
@@ -213,9 +262,11 @@ export default function PatientReviewPage() {
     toast.success('CSV exported');
   };
 
+  const showEvidenceToggle = tab === 'disruption_heavy' || tab === 'progression_gap';
+
   return (
     <div className="space-y-4">
-      {/* Header */}
+      {/* Summary boxes — clickable */}
       <Card>
         <CardHeader className="pb-3">
           <CardTitle className="text-sm font-semibold flex items-center gap-2">
@@ -223,20 +274,25 @@ export default function PatientReviewPage() {
             <Badge variant="outline" className="text-base">{needsReviewCount}</Badge>
           </CardTitle>
           <CardDescription className="text-xs">
-            Operational flags for manual review — not clinical judgments.
+            Click any box below to filter the table to those patients.
           </CardDescription>
         </CardHeader>
         <CardContent>
           <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
             {[
-              { label: 'Progression Gap', value: gapCount },
-              { label: 'Disruption-Heavy', value: disruptionCount },
-              { label: 'Repeat Reschedules', value: repeatResch },
-              { label: 'Repeat No-Shows', value: repeatNoShow },
+              { label: 'Progression Gap', value: gapCount, filter: 'progression_gap' as TabFilter },
+              { label: 'Disruption-Heavy', value: disruptionCount, filter: 'disruption_heavy' as TabFilter },
+              { label: 'Repeat Reschedules', value: repeatResch, filter: 'repeat_reschedule' as TabFilter },
+              { label: 'Repeat No-Shows', value: repeatNoShow, filter: 'needsreview' as TabFilter },
             ].map(s => (
-              <div key={s.label} className="p-2.5 rounded border bg-muted/30">
+              <div
+                key={s.label}
+                className={`p-2.5 rounded border cursor-pointer transition-all hover:shadow-md hover:border-secondary ${tab === s.filter ? 'bg-secondary/10 border-secondary' : 'bg-muted/30'}`}
+                onClick={() => handleSummaryClick(s.filter)}
+              >
                 <div className="text-lg font-bold">{s.value}</div>
                 <div className="text-[10px] text-muted-foreground">{s.label}</div>
+                <div className="text-[9px] text-secondary font-medium mt-0.5">Click to filter →</div>
               </div>
             ))}
           </div>
@@ -245,35 +301,75 @@ export default function PatientReviewPage() {
 
       {/* Classification chips */}
       <div className="flex gap-1.5 flex-wrap">
-        {Object.entries(classCounts).map(([cls, count]) => (
-          <Badge
-            key={cls} variant="outline" className="cursor-pointer hover:bg-accent/50 text-[10px]"
-            onClick={() => {
-              if (cls === 'possible_progression_gap') setTab('progression_gap');
-              else if (cls === 'disruption_heavy') setTab('disruption_heavy');
-              else if (cls === 'maintenance_phase_only') setTab('maintenance');
-              else if (cls === 'quarter_boundary_unclear') setTab('quarter_boundary');
-              else setTab('all');
-              setPage(0);
-            }}
-          >
-            {classLabels[cls as CarePathClassification] || cls}: {count}
-          </Badge>
-        ))}
+        {Object.entries(classCounts).map(([cls, count]) => {
+          const targetTab: TabFilter =
+            cls === 'possible_progression_gap' ? 'progression_gap' :
+            cls === 'disruption_heavy' ? 'disruption_heavy' :
+            cls === 'maintenance_phase_only' ? 'maintenance' :
+            cls === 'quarter_boundary_unclear' ? 'quarter_boundary' :
+            'all';
+          return (
+            <Badge
+              key={cls} variant="outline"
+              className={`cursor-pointer hover:bg-accent/50 text-[10px] ${tab === targetTab ? 'bg-secondary/20 border-secondary' : ''}`}
+              onClick={() => handleSummaryClick(targetTab)}
+            >
+              {classLabels[cls as CarePathClassification] || cls}: {count}
+            </Badge>
+          );
+        })}
       </div>
 
-      {/* Active filter badge */}
+      {/* Active filter + evidence toggle */}
       {tab !== 'all' && (
-        <div className="flex items-center gap-2">
-          <Badge variant="secondary" className="text-xs gap-1.5 py-1">
-            Showing: {filterLabels[tab]}
-            <button onClick={() => { setTab('all'); setSearchParams({}); setPage(0); }} className="hover:text-destructive">
-              <X className="h-3 w-3" />
-            </button>
-          </Badge>
-          <span className="text-[10px] text-muted-foreground">
-            Filtered from: Report A + B | Period: {carePathAnalysis ? 'selected range' : ''}
-          </span>
+        <div className="flex items-center justify-between gap-2 flex-wrap">
+          <div className="flex items-center gap-2">
+            <Badge variant="secondary" className="text-xs gap-1.5 py-1">
+              Showing: {filterLabels[tab]}
+              <button onClick={clearFilter} className="hover:text-destructive">
+                <X className="h-3 w-3" />
+              </button>
+            </Badge>
+            <span className="text-[10px] text-muted-foreground">
+              {uniquePatientCount} patients · {flatRows.length} rows
+            </span>
+          </div>
+
+          {/* Evidence / Full Journey toggle */}
+          {showEvidenceToggle && (
+            <div className="flex border rounded overflow-hidden">
+              <button
+                className={`px-2.5 py-1 text-[10px] flex items-center gap-1 ${evidenceMode === 'evidence' ? 'bg-secondary text-secondary-foreground' : 'bg-card text-muted-foreground hover:bg-accent/50'}`}
+                onClick={() => { setEvidenceMode('evidence'); setPage(0); }}
+              >
+                <Eye className="h-3 w-3" /> Evidence Rows
+              </button>
+              <button
+                className={`px-2.5 py-1 text-[10px] flex items-center gap-1 ${evidenceMode === 'full_journey' ? 'bg-secondary text-secondary-foreground' : 'bg-card text-muted-foreground hover:bg-accent/50'}`}
+                onClick={() => { setEvidenceMode('full_journey'); setPage(0); }}
+              >
+                <List className="h-3 w-3" /> Full Journey
+              </button>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Filter explanation banners */}
+      {tab === 'disruption_heavy' && (
+        <div className="text-[11px] p-2.5 rounded bg-muted/50 border text-muted-foreground">
+          <strong className="text-primary">Disruption-Heavy Patients ({disruptionCount})</strong> — patients with 2+ disruption events (cancel/no-show/reschedule).
+          {evidenceMode === 'evidence'
+            ? ' Showing only disruption event rows. Toggle "Full Journey" to see all visits.'
+            : ' Showing all visit rows including completed appointments.'}
+        </div>
+      )}
+      {tab === 'progression_gap' && (
+        <div className="text-[11px] p-2.5 rounded bg-muted/50 border text-muted-foreground">
+          <strong className="text-primary">Progression Gap ({gapCount})</strong> — patients whose care path shows a milestone gap (e.g., ROF completed but no active treatment followed).
+          {evidenceMode === 'evidence'
+            ? ' Showing only milestone rows (NP, ROF, SC, LTC). Toggle "Full Journey" for context.'
+            : ' Showing all visit rows.'}
         </div>
       )}
 
@@ -283,7 +379,7 @@ export default function PatientReviewPage() {
           <div className="flex items-center justify-between flex-wrap gap-3">
             <CardTitle className="text-xs font-medium">
               {tab !== 'all'
-                ? `Patients: ${filterLabels[tab]} — ${flatRows.length} rows`
+                ? `${filterLabels[tab]} — ${uniquePatientCount} patients, ${flatRows.length} rows`
                 : `Patient Operational Table — ${flatRows.length} rows`}
             </CardTitle>
             <Button variant="outline" size="sm" onClick={exportCSV} className="gap-1 h-7 text-xs">
@@ -292,7 +388,7 @@ export default function PatientReviewPage() {
           </div>
         </CardHeader>
         <CardContent className="space-y-3">
-          <Tabs value={tab} onValueChange={(v) => { setTab(v as TabFilter); setPage(0); }}>
+          <Tabs value={tab} onValueChange={(v) => { setTab(v as TabFilter); setPage(0); setEvidenceMode('evidence'); }}>
             <TabsList className="flex-wrap h-auto gap-0.5">
               <TabsTrigger value="all" className="text-[10px] h-7">All ({journeys.length})</TabsTrigger>
               <TabsTrigger value="needsreview" className="text-[10px] h-7">Needs Review ({needsReviewCount})</TabsTrigger>
@@ -319,7 +415,7 @@ export default function PatientReviewPage() {
           </div>
 
           <div className="text-[10px] text-muted-foreground">
-            {paginatedRows.length} of {flatRows.length} rows
+            {paginatedRows.length} of {flatRows.length} rows · {uniquePatientCount} unique patients
           </div>
 
           <div className="rounded border overflow-auto max-h-[500px]">
@@ -337,7 +433,7 @@ export default function PatientReviewPage() {
               </TableHeader>
               <TableBody>
                 {paginatedRows.map((row, i) => (
-                  <TableRow key={i}>
+                  <TableRow key={i} className={!row.isEvidenceRow && evidenceMode === 'full_journey' ? 'opacity-50' : ''}>
                     <TableCell className="text-[10px] max-w-[100px] truncate">{row.patientName}</TableCell>
                     <TableCell className="text-[10px]">{row.provider}</TableCell>
                     <TableCell className="text-[10px] whitespace-nowrap">{row.date}</TableCell>
@@ -345,7 +441,7 @@ export default function PatientReviewPage() {
                     <TableCell className="text-[10px]">{row.status}</TableCell>
                     <TableCell className="text-[10px]">{row.visitSequence}</TableCell>
                     <TableCell className="text-[10px]">
-                      {row.isFlagged && (
+                      {row.isFlagged && row.journey && (
                         <button onClick={() => setSelectedJourney(row.journey)}
                           className="text-warning hover:text-warning/80 cursor-pointer" title="View details">
                           <AlertTriangle className="h-3.5 w-3.5" />
@@ -445,7 +541,6 @@ function PatientFlagModal({ journey, filters, onClose, onShowEvidence }: {
           <DialogTitle className="text-sm">Why {journey.patientName} is flagged</DialogTitle>
         </DialogHeader>
         <div className="space-y-4">
-          {/* Timeline */}
           <div>
             <h4 className="text-xs font-semibold mb-2">Visit Sequence</h4>
             <div className="space-y-0.5">
@@ -475,7 +570,6 @@ function PatientFlagModal({ journey, filters, onClose, onShowEvidence }: {
             </div>
           </div>
 
-          {/* Explanation */}
           <div className="space-y-2 text-xs">
             {reasons.length > 0 && (
               <div>
