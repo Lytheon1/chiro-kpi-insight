@@ -39,12 +39,13 @@ export default function DashboardLayout() {
           navigate('/');
           return;
         }
-        const { loadData } = useDashboard as any;
+        loadData(JSON.parse(eodStr), JSON.parse(cmrStr));
       } catch {
-        // Context not ready yet
+        toast.error('Failed to load data.');
+        navigate('/');
       }
     }
-  }, [isLoaded]);
+  }, [isLoaded, loadData, navigate]);
 
   return (
     <div className="min-h-screen bg-background">
