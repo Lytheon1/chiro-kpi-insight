@@ -10,6 +10,7 @@ import { ArrowLeft, Settings, FileCheck } from 'lucide-react';
 import { useState, useEffect } from 'react';
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
+import { isSingleProviderMode } from '@/lib/utils/providerColors';
 
 const navItems = [
   { to: '/executive-brief', label: 'Executive Brief' },
@@ -28,6 +29,15 @@ export default function DashboardLayout() {
     allProviders, calculatedWeeks, loadData,
   } = ctx;
   const [settingsOpen, setSettingsOpen] = useState(false);
+
+  const singleProvider = isSingleProviderMode(allProviders);
+
+  // Auto-select the sole provider when only one exists
+  useEffect(() => {
+    if (isLoaded && singleProvider && allProviders.length === 1 && selectedProvider === 'All') {
+      setSelectedProvider(allProviders[0]);
+    }
+  }, [isLoaded, singleProvider, allProviders, selectedProvider, setSelectedProvider]);
 
   useEffect(() => {
     if (!isLoaded) {
@@ -57,7 +67,7 @@ export default function DashboardLayout() {
               {isLoaded && (
                 <Badge variant="outline" className="text-[9px] bg-success/10 text-success border-success/30 gap-1">
                   <FileCheck className="h-2.5 w-2.5" />
-                  Data Loaded
+                  {singleProvider && allProviders[0] ? allProviders[0] : 'Data Loaded'}
                 </Badge>
               )}
             </div>
@@ -93,22 +103,28 @@ export default function DashboardLayout() {
         {endOfDay?.minDate && endOfDay?.maxDate && (
           <p className="text-xs text-muted-foreground mb-4 font-mono">
             Report Period: {endOfDay.minDate} — {endOfDay.maxDate}
+            {singleProvider && allProviders[0] && (
+              <span className="ml-3 font-semibold text-foreground">{allProviders[0]}</span>
+            )}
           </p>
         )}
 
         {settingsOpen && (
           <div className="space-y-4 mb-6">
             <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-6 p-4 rounded-lg border bg-card">
-              <div className="space-y-2">
-                <Label className="text-xs">Provider</Label>
-                <Select value={selectedProvider} onValueChange={setSelectedProvider}>
-                  <SelectTrigger className="h-8 text-xs"><SelectValue /></SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="All">All Providers</SelectItem>
-                    {allProviders.map(p => <SelectItem key={p} value={p}>{p}</SelectItem>)}
-                  </SelectContent>
-                </Select>
-              </div>
+              {/* Only show provider selector if multiple providers */}
+              {!singleProvider && (
+                <div className="space-y-2">
+                  <Label className="text-xs">Provider</Label>
+                  <Select value={selectedProvider} onValueChange={setSelectedProvider}>
+                    <SelectTrigger className="h-8 text-xs"><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="All">All Providers</SelectItem>
+                      {allProviders.map(p => <SelectItem key={p} value={p}>{p}</SelectItem>)}
+                    </SelectContent>
+                  </Select>
+                </div>
+              )}
               <div className="space-y-2">
                 <Label className="text-xs">Weeks Override</Label>
                 <Input className="h-8 text-xs" type="number" placeholder={calculatedWeeks.toString()} value={weeksOverride}
@@ -139,7 +155,8 @@ export default function DashboardLayout() {
           </div>
         )}
 
-        {!settingsOpen && isLoaded && (
+        {/* Inline provider selector only shown for multi-provider in non-settings mode */}
+        {!settingsOpen && isLoaded && !singleProvider && (
           <div className="flex gap-4 items-end mb-6">
             <div className="space-y-1">
               <Label className="text-xs">Provider</Label>

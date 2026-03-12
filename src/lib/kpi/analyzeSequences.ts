@@ -4,7 +4,9 @@ import type { EndOfDayAppointmentRow, DashboardFilters } from "../../types/repor
 export interface NPNextStepResult {
   category: string;
   count: number;
-  patients: Array<{ name: string; provider: string; npDate: string; nextDate?: string; nextType?: string }>;
+  pctOfCohort: number;
+  patients: Array<{ name: string; provider: string; npDate: string; nextDate?: string; nextType?: string; hadDisruptionBeforeStep?: boolean }>;
+  note?: string;
 }
 
 export interface ROFPathResult {
@@ -20,14 +22,23 @@ export interface SequenceAnalysisResult {
   totalROFPatients: number;
   unexpectedNextStepCount: number;
   unexpectedNextStepPct: number;
+  duplicateNPCount: number;
 }
 
 /**
  * Build patient journeys: group by name, sort chronologically.
+ * When providerFilter is active, only include that provider's visits.
  */
-function buildPatientJourneys(rows: EndOfDayAppointmentRow[]): Map<string, EndOfDayAppointmentRow[]> {
+function buildPatientJourneys(
+  rows: EndOfDayAppointmentRow[],
+  providerFilter?: string
+): Map<string, EndOfDayAppointmentRow[]> {
+  const filtered = providerFilter
+    ? rows.filter(r => r.provider.toLowerCase().trim() === providerFilter.toLowerCase().trim())
+    : rows;
+
   const map = new Map<string, EndOfDayAppointmentRow[]>();
-  for (const row of rows) {
+  for (const row of filtered) {
     const key = row.patientName?.trim().toLowerCase() || '__unknown__';
     if (key === '__unknown__') continue;
     if (!map.has(key)) map.set(key, []);
@@ -73,52 +84,99 @@ function isCompleted(row: EndOfDayAppointmentRow, filters: DashboardFilters): bo
   return containsAny(normalizeText(row.statusRaw), filters.completedKeywords);
 }
 
+function isDisrupted(row: EndOfDayAppointmentRow, filters: DashboardFilters): boolean {
+  const s = normalizeText(row.statusRaw);
+  return containsAny(s, filters.canceledKeywords) ||
+    containsAny(s, filters.noShowKeywords) ||
+    containsAny(s, filters.rescheduledKeywords);
+}
+
+function isNP(purposeRaw: string, filters: DashboardFilters): boolean {
+  return containsAny(normalizeText(purposeRaw), filters.newPatientKeywords);
+}
+
 export function analyzeSequences(
   appointments: EndOfDayAppointmentRow[],
   filters: DashboardFilters,
   periodEndDate?: string
 ): SequenceAnalysisResult {
-  const journeys = buildPatientJourneys(appointments);
+  const journeys = buildPatientJourneys(appointments, filters.provider);
 
-  // NP Next Step Analysis
+  // ─── NP Next Meaningful Step ─────────────────────────────────────────────
   const npNextMap = new Map<string, NPNextStepResult>();
   let totalNP = 0;
   let unexpectedCount = 0;
+  let duplicateNPCount = 0;
 
   for (const [patientKey, visits] of journeys) {
-    // Find first NP visit in period
-    const npIdx = visits.findIndex(v =>
-      containsAny(normalizeText(v.purposeRaw), filters.newPatientKeywords)
-    );
+    // Find first NP visit
+    const npIdx = visits.findIndex(v => isNP(v.purposeRaw, filters));
     if (npIdx === -1) continue;
     totalNP++;
 
     const npVisit = visits[npIdx];
-    const nextVisits = visits.slice(npIdx + 1);
+    const afterNP = visits.slice(npIdx + 1);
 
     let category: string;
     let nextDate: string | undefined;
     let nextType: string | undefined;
+    let hadDisruptionBefore = false;
 
-    if (nextVisits.length === 0) {
+    // Find next meaningful step: skip disrupted duplicate NP rows
+    let meaningfulVisit: EndOfDayAppointmentRow | undefined;
+    let disruptionsBeforeMeaningful = 0;
+
+    for (const v of afterNP) {
+      const vType = classifyVisitType(v.purposeRaw, filters);
+
+      // A disrupted row (canceled/no-show/rescheduled) — note it but skip
+      if (isDisrupted(v, filters)) {
+        disruptionsBeforeMeaningful++;
+        continue;
+      }
+
+      // A completed duplicate NP — likely rebooking artifact
+      if (vType === 'New Patient' && isCompleted(v, filters)) {
+        duplicateNPCount++;
+        // Don't use as meaningful next step — skip it
+        continue;
+      }
+
+      // This is the meaningful next completed visit
+      meaningfulVisit = v;
+      break;
+    }
+
+    if (!meaningfulVisit) {
       if (isNearPeriodEnd(npVisit.date, periodEndDate)) {
         category = 'Quarter-Boundary — No Next Visit Yet';
+      } else if (disruptionsBeforeMeaningful > 0) {
+        category = 'Disruption Only — No Completed Follow-Up';
+        unexpectedCount++;
       } else {
         category = 'No Next Visit in Period';
         unexpectedCount++;
       }
     } else {
-      const nextVisit = nextVisits[0];
-      category = classifyVisitType(nextVisit.purposeRaw, filters);
-      nextDate = nextVisit.date;
-      nextType = nextVisit.purposeRaw;
-      if (category !== 'ROF') {
+      const stepType = classifyVisitType(meaningfulVisit.purposeRaw, filters);
+      hadDisruptionBefore = disruptionsBeforeMeaningful > 0;
+
+      if (stepType === 'ROF' && hadDisruptionBefore) {
+        category = 'Disruption Before ROF';
+        // Still reached ROF — not unexpected
+      } else if (stepType === 'ROF') {
+        category = 'ROF';
+      } else {
+        category = stepType;
         unexpectedCount++;
       }
+
+      nextDate = meaningfulVisit.date;
+      nextType = meaningfulVisit.purposeRaw;
     }
 
     if (!npNextMap.has(category)) {
-      npNextMap.set(category, { category, count: 0, patients: [] });
+      npNextMap.set(category, { category, count: 0, pctOfCohort: 0, patients: [] });
     }
     const entry = npNextMap.get(category)!;
     entry.count++;
@@ -128,10 +186,31 @@ export function analyzeSequences(
       npDate: npVisit.date,
       nextDate,
       nextType,
+      hadDisruptionBeforeStep: hadDisruptionBefore,
     });
   }
 
-  // ROF Next 2 Visits Analysis
+  // Compute pctOfCohort and add notes
+  for (const [, entry] of npNextMap) {
+    entry.pctOfCohort = totalNP > 0 ? entry.count / totalNP : 0;
+    if (entry.category === 'Disruption Before ROF') {
+      entry.note = `${entry.count} patients had disruption events before reaching ROF`;
+    }
+  }
+
+  // If there were duplicate NPs detected, add a diagnostics entry
+  if (duplicateNPCount > 0) {
+    const dupeEntry: NPNextStepResult = {
+      category: 'Duplicate / Rebooked NP',
+      count: duplicateNPCount,
+      pctOfCohort: totalNP > 0 ? duplicateNPCount / totalNP : 0,
+      patients: [],
+      note: 'Completed NP visits that appeared after an initial NP — likely rebooking or intake artifact. Excluded from next-step classification.',
+    };
+    npNextMap.set('Duplicate / Rebooked NP', dupeEntry);
+  }
+
+  // ─── ROF Next 2 Visits ──────────────────────────────────────────────────
   const rofPathMap = new Map<string, ROFPathResult>();
   let totalROF = 0;
 
@@ -143,7 +222,6 @@ export function analyzeSequences(
     totalROF++;
 
     const rofVisit = visits[rofIdx];
-    // Find next 2 completed visits after ROF, skip canceled/no-show
     const afterROF = visits.slice(rofIdx + 1);
     const completedAfter = afterROF.filter(v => isCompleted(v, filters));
 
@@ -152,13 +230,7 @@ export function analyzeSequences(
     let visit2Type: string | undefined;
 
     if (completedAfter.length === 0) {
-      // Check for disruptions in between
-      const hasDisruptions = afterROF.some(v => {
-        const s = normalizeText(v.statusRaw);
-        return containsAny(s, filters.canceledKeywords) ||
-          containsAny(s, filters.noShowKeywords) ||
-          containsAny(s, filters.rescheduledKeywords);
-      });
+      const hasDisruptions = afterROF.some(v => isDisrupted(v, filters));
 
       if (isNearPeriodEnd(rofVisit.date, periodEndDate)) {
         pathLabel = 'ROF → No Next Visit (Quarter Boundary)';
@@ -179,7 +251,6 @@ export function analyzeSequences(
         pathLabel = `ROF → ${visit1Type}`;
       }
 
-      // Check for direct-to-maintenance flags
       if ((visit1Type === 'Supportive Care' || visit1Type === 'LTC') && !isActiveTreatment(v1.purposeRaw, filters)) {
         pathLabel = `ROF → ${visit1Type} (Direct)`;
       }
@@ -209,5 +280,6 @@ export function analyzeSequences(
     totalROFPatients: totalROF,
     unexpectedNextStepCount: unexpectedCount,
     unexpectedNextStepPct: totalNP > 0 ? unexpectedCount / totalNP : 0,
+    duplicateNPCount,
   };
 }
