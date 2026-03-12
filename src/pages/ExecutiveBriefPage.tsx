@@ -218,17 +218,11 @@ export default function ExecutiveBriefPage() {
                 </div>
               </div>
 
-              <div className="flex gap-6">
-                <div>
-                  <div className="revenue-value text-destructive">{fmt$(revenueMetrics.estimatedCancellationLeakage)}</div>
-                  <div className="text-[11px] text-muted-foreground">Est. Quarterly Leakage</div>
-                  <div className="text-[10px] text-faint">{revenueMetrics.canceledCount} canceled × ${revenueMetrics.configuredAvgVisitValue} avg</div>
-                </div>
-                <div>
-                  <div className="revenue-value">{fmt$(revenueMetrics.totalPostedCharges)}</div>
-                  <div className="text-[11px] text-muted-foreground">Total Posted Charges</div>
-                  <div className="text-[10px] text-faint">{revenueMetrics.completedVisitCount} completed visits</div>
-                </div>
+              <div>
+                <div className="revenue-value text-destructive">{fmt$(revenueMetrics.estimatedCancellationLeakage)}</div>
+                <div className="text-[11px] text-muted-foreground">Est. Quarterly Leakage</div>
+                <div className="text-[10px] text-faint">{revenueMetrics.canceledCount} canceled × ${revenueMetrics.configuredAvgVisitValue} avg visit</div>
+              </div>
               </div>
 
               {/* Lifetime Opportunity */}
