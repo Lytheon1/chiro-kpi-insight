@@ -11,6 +11,8 @@ import { useState, useEffect } from 'react';
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
 import { isSingleProviderMode } from '@/lib/utils/providerColors';
+import { loadFiltersFromStorage, saveFiltersToStorage } from '@/lib/utils/keywords';
+import type { DashboardFilters } from '@/types/reports';
 
 const navItems = [
   { to: '/executive-brief', label: 'Executive Brief' },
@@ -29,8 +31,20 @@ export default function DashboardLayout() {
     allProviders, calculatedWeeks, loadData,
   } = ctx;
   const [settingsOpen, setSettingsOpen] = useState(false);
+  const [filtersRestored, setFiltersRestored] = useState(false);
 
   const singleProvider = isSingleProviderMode(allProviders);
+
+  // Restore filters from localStorage on mount
+  useEffect(() => {
+    if (!filtersRestored) {
+      const saved = loadFiltersFromStorage();
+      if (saved) {
+        setFilters(saved as DashboardFilters);
+      }
+      setFiltersRestored(true);
+    }
+  }, [filtersRestored, setFilters]);
 
   // Auto-select the sole provider when only one exists
   useEffect(() => {
@@ -56,6 +70,17 @@ export default function DashboardLayout() {
       }
     }
   }, [isLoaded, loadData, navigate]);
+
+  const handleFiltersChange = (newFilters: DashboardFilters) => {
+    setFilters(newFilters);
+    saveFiltersToStorage(newFilters);
+  };
+
+  // Active exclusions summary
+  const exclusions = [
+    ...(filters.excludedPurposeKeywords ?? []),
+    ...(filters.massageKeywords ?? []),
+  ].filter(Boolean);
 
   return (
     <div className="min-h-screen bg-background">
@@ -101,18 +126,24 @@ export default function DashboardLayout() {
 
       <div className="container mx-auto px-4 py-6 max-w-[1600px]">
         {endOfDay?.minDate && endOfDay?.maxDate && (
-          <p className="text-xs text-muted-foreground mb-4 font-mono">
-            Report Period: {endOfDay.minDate} — {endOfDay.maxDate}
-            {singleProvider && allProviders[0] && (
-              <span className="ml-3 font-semibold text-foreground">{allProviders[0]}</span>
+          <div className="mb-4 space-y-1">
+            <p className="text-xs text-muted-foreground font-mono">
+              Report Period: {endOfDay.minDate} — {endOfDay.maxDate}
+              {singleProvider && allProviders[0] && (
+                <span className="ml-3 font-semibold text-foreground">{allProviders[0]}</span>
+              )}
+            </p>
+            {exclusions.length > 0 && (
+              <p className="text-[10px] text-muted-foreground px-2 py-1 rounded bg-muted/50 border inline-block">
+                Active exclusions: {exclusions.join(', ')} | Massage excluded from retention
+              </p>
             )}
-          </p>
+          </div>
         )}
 
         {settingsOpen && (
           <div className="space-y-4 mb-6">
             <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-6 p-4 rounded-lg border bg-card">
-              {/* Only show provider selector if multiple providers */}
               {!singleProvider && (
                 <div className="space-y-2">
                   <Label className="text-xs">Provider</Label>
@@ -151,11 +182,10 @@ export default function DashboardLayout() {
                   onChange={e => setGoals({ ...goals, weeklyKept: parseInt(e.target.value) || 0 })} />
               </div>
             </div>
-            <KeywordsConfig filters={filters} onFiltersChange={setFilters} />
+            <KeywordsConfig filters={filters} onFiltersChange={handleFiltersChange} />
           </div>
         )}
 
-        {/* Inline provider selector only shown for multi-provider in non-settings mode */}
         {!settingsOpen && isLoaded && !singleProvider && (
           <div className="flex gap-4 items-end mb-6">
             <div className="space-y-1">

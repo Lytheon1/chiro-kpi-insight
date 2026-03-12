@@ -1,5 +1,5 @@
-import { useState, useMemo } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useState, useMemo, useEffect } from 'react';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useDashboard } from '@/lib/context/DashboardContext';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -9,13 +9,13 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
-import { Download, ChevronLeft, ChevronRight, Search, AlertTriangle, ArrowRight } from 'lucide-react';
+import { Download, ChevronLeft, ChevronRight, Search, AlertTriangle, ArrowRight, X } from 'lucide-react';
 import { toast } from 'sonner';
 import Papa from 'papaparse';
 import { containsAny, normalizeText } from '@/lib/utils/normalize';
 import type { CarePathClassification, PatientJourney } from '@/types/reports';
 
-type TabFilter = 'all' | 'needsreview' | 'progression_gap' | 'disruption_heavy' | 'maintenance' | 'quarter_boundary';
+type TabFilter = 'all' | 'needsreview' | 'progression_gap' | 'disruption_heavy' | 'maintenance' | 'quarter_boundary' | 'repeat_reschedule';
 type SortKey = 'date' | 'patientName' | 'provider' | 'status' | 'visitType';
 const PAGE_SIZE = 50;
 
@@ -28,16 +28,42 @@ const classLabels: Record<CarePathClassification, string> = {
   needs_review: 'Needs Review',
 };
 
+const filterLabels: Record<TabFilter, string> = {
+  all: 'All',
+  needsreview: 'Needs Review',
+  progression_gap: 'Progression Gap',
+  disruption_heavy: 'Disruption-Heavy Patients',
+  maintenance: 'Maintenance',
+  quarter_boundary: 'Quarter-Boundary',
+  repeat_reschedule: 'Repeat-Rescheduled',
+};
+
 export default function PatientReviewPage() {
   const navigate = useNavigate();
+  const [searchParams, setSearchParams] = useSearchParams();
   const { carePathAnalysis, activeFilters, allProviders } = useDashboard();
-  const [tab, setTab] = useState<TabFilter>('all');
+  
+  // Read initial filter from URL
+  const urlFilter = searchParams.get('filter');
+  const initialTab: TabFilter = (urlFilter && urlFilter in filterLabels) ? urlFilter as TabFilter : 'all';
+  
+  const [tab, setTab] = useState<TabFilter>(initialTab);
   const [search, setSearch] = useState('');
   const [selectedProvider, setSelectedProvider] = useState('all');
   const [sortKey, setSortKey] = useState<SortKey>('patientName');
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('asc');
   const [page, setPage] = useState(0);
   const [selectedJourney, setSelectedJourney] = useState<PatientJourney | null>(null);
+  
+  // Sync URL filter changes
+  useEffect(() => {
+    const f = searchParams.get('filter');
+    if (f && f in filterLabels && f !== tab) {
+      setTab(f as TabFilter);
+      setPage(0);
+    }
+  }, [searchParams]);
+
 
   const journeys = carePathAnalysis?.journeys ?? [];
   const patientsNeedingReview = carePathAnalysis?.patientsNeedingReview ?? [];
@@ -68,6 +94,10 @@ export default function PatientReviewPage() {
       case 'disruption_heavy': jList = journeys.filter(j => j.secondaryFlags.includes('disruption_heavy')); break;
       case 'maintenance': jList = journeys.filter(j => j.classification === 'maintenance_phase_only'); break;
       case 'quarter_boundary': jList = journeys.filter(j => j.classification === 'quarter_boundary_unclear'); break;
+      case 'repeat_reschedule': jList = journeys.filter(j => {
+        const rs = j.visits.filter(v => containsAny(normalizeText(v.statusRaw), activeFilters.rescheduledKeywords)).length;
+        return rs >= 2;
+      }); break;
     }
     if (selectedProvider !== 'all') jList = jList.filter(j => j.provider === selectedProvider);
     if (search.trim()) {
@@ -95,7 +125,7 @@ export default function PatientReviewPage() {
       return sortDir === 'asc' ? cmp : -cmp;
     });
     return rows;
-  }, [journeys, patientsNeedingReview, tab, selectedProvider, search, sortKey, sortDir]);
+  }, [journeys, patientsNeedingReview, tab, selectedProvider, search, sortKey, sortDir, activeFilters]);
 
   if (!carePathAnalysis) {
     return <Card><CardContent className="py-8 text-center text-muted-foreground text-sm">Upload reports to see patient data.</CardContent></Card>;
@@ -174,11 +204,30 @@ export default function PatientReviewPage() {
         ))}
       </div>
 
+      {/* Active filter badge */}
+      {tab !== 'all' && (
+        <div className="flex items-center gap-2">
+          <Badge variant="secondary" className="text-xs gap-1.5 py-1">
+            Showing: {filterLabels[tab]}
+            <button onClick={() => { setTab('all'); setSearchParams({}); setPage(0); }} className="hover:text-destructive">
+              <X className="h-3 w-3" />
+            </button>
+          </Badge>
+          <span className="text-[10px] text-muted-foreground">
+            Filtered from: Report A + B | Period: {carePathAnalysis ? 'selected range' : ''}
+          </span>
+        </div>
+      )}
+
       {/* Table */}
       <Card>
         <CardHeader className="pb-2">
           <div className="flex items-center justify-between flex-wrap gap-3">
-            <CardTitle className="text-xs font-medium">Patient Operational Table</CardTitle>
+            <CardTitle className="text-xs font-medium">
+              {tab !== 'all'
+                ? `Patients: ${filterLabels[tab]} — ${flatRows.length} rows`
+                : `Patient Operational Table — ${flatRows.length} rows`}
+            </CardTitle>
             <Button variant="outline" size="sm" onClick={exportCSV} className="gap-1 h-7 text-xs">
               <Download className="h-3 w-3" /> Export CSV
             </Button>
@@ -193,6 +242,7 @@ export default function PatientReviewPage() {
               <TabsTrigger value="disruption_heavy" className="text-[10px] h-7">Disruption ({disruptionCount})</TabsTrigger>
               <TabsTrigger value="maintenance" className="text-[10px] h-7">Maintenance</TabsTrigger>
               <TabsTrigger value="quarter_boundary" className="text-[10px] h-7">Quarter</TabsTrigger>
+              <TabsTrigger value="repeat_reschedule" className="text-[10px] h-7">Repeat Resch ({repeatResch})</TabsTrigger>
             </TabsList>
           </Tabs>
           <div className="flex gap-2 flex-wrap">

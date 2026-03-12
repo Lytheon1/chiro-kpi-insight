@@ -15,18 +15,18 @@ export const DEFAULT_FILTERS: DashboardFilters = {
   canceledKeywords: ["canceled", "cancelled"],
   noShowKeywords: ["no show", "no-show", "noshow"],
   rescheduledKeywords: ["rescheduled", "reschedule"],
-  rofKeywords: ["rof", "report of findings"],
+  rofKeywords: ["rof: chiro", "rof"],
   massageKeywords: ["massage"],
-  newPatientKeywords: ["new patient", "np"],
-  returnVisitKeywords: ["return visit", "rv", "chiropractic", "therapy", "adjustment"],
-  reExamKeywords: ["re-exam", "re exam", "reexam"],
-  finalEvalKeywords: ["final eval", "final evaluation", "discharge eval"],
-  ptfKeywords: ["ptf", "post treatment followup", "post-treatment followup", "follow up"],
-  supportiveCareKeywords: ["supportive care", "sc"],
-  ltcKeywords: ["long-term care", "long term care", "ltc"],
-  excludedPurposeKeywords: [],
-  tractionKeywords: ["traction", "spinal decompression", "decompression"],
-  therapyKeywords: ["therapy", "physical therapy", "pt", "e-stim", "ultrasound"],
+  newPatientKeywords: ["new patient", "np: pi", "np: wellness"],
+  returnVisitKeywords: ["return visit: chiropractic", "return visit: pi"],
+  reExamKeywords: ["re-exam"],
+  finalEvalKeywords: ["final evaluation"],
+  ptfKeywords: ["ptf"],
+  supportiveCareKeywords: ["supportive care"],
+  ltcKeywords: ["ltc: chiropractic", "ltc"],
+  excludedPurposeKeywords: ["10-min phone", "complimentary 10-min"],
+  tractionKeywords: ["spinal decompression", "traction"],
+  therapyKeywords: ["therapy"],
 };
 
 export function calculateDashboardMetrics(
@@ -61,13 +61,21 @@ export function calculateDashboardMetrics(
     };
   };
 
-  // Main KPI calculations — Report A only
+  // Total scheduled = all rows with completed, canceled, or no-show status
+  let totalScheduled = 0, totalCompleted = 0, totalCanceled = 0, totalNoShow = 0;
   let scheduledROF = 0, completedROF = 0;
   let scheduledNonMassage = 0, completedNonMassage = 0;
 
   for (const a of appts) {
     const c = classify(a);
     const isScheduledDenom = c.isCompleted || c.isCanceled || c.isNoShow;
+    
+    // Total counts (all rows, no exclusions)
+    if (isScheduledDenom) totalScheduled++;
+    if (c.isCompleted) totalCompleted++;
+    if (c.isCanceled) totalCanceled++;
+    if (c.isNoShow) totalNoShow++;
+    
     if (c.isExcluded) continue;
     if (c.isROF && isScheduledDenom) scheduledROF++;
     if (c.isROF && c.isCompleted) completedROF++;
@@ -86,11 +94,10 @@ export function calculateDashboardMetrics(
   })();
 
   // Report B: reschedule / cancel detail
-  let rescheduledCount = 0, canceledDetailCount = 0;
+  let rescheduledCount = 0, canceledDetailCount = 0, noShowDetailCount = 0;
   const cancelReasonMap = new Map<string, number>();
   const rescheduleReasonMap = new Map<string, number>();
 
-  // Reschedule breakdowns
   const reschByProvider = new Map<string, number>();
   const reschByApptType = new Map<string, number>();
   const reschByPatient = new Map<string, number>();
@@ -115,6 +122,9 @@ export function calculateDashboardMetrics(
       canceledDetailCount++;
       cancelReasonMap.set(reason, (cancelReasonMap.get(reason) ?? 0) + 1);
     }
+    if (containsAny(status, filters.noShowKeywords)) {
+      noShowDetailCount++;
+    }
   }
 
   const sortReasons = (m: Map<string, number>) =>
@@ -122,7 +132,6 @@ export function calculateDashboardMetrics(
       .sort(([, a], [, b]) => b - a)
       .map(([reason, count]) => ({ reason, count }));
 
-  // Repeat-rescheduled patients (2+)
   const repeatRescheduledPatients = Array.from(reschByPatient.values()).filter(c => c >= 2).length;
 
   // Disruption-heavy patients: cancel + no-show + reschedule >= 2 from CMR
@@ -141,10 +150,12 @@ export function calculateDashboardMetrics(
   }
   const disruptionHeavyPatients = Array.from(cmrPatientDisruptions.values()).filter(c => c >= 2).length;
 
+  // Unique patients with ANY disruption
+  const uniqueDisruptionPatients = cmrPatientDisruptions.size;
+
   // Provider disruption summary
   const providerDisruptionMap = new Map<string, { canceled: number; noShow: number; rescheduled: number; scheduledDenom: number }>();
 
-  // Init from Report A scheduled denom
   for (const a of appts) {
     const c = classify(a);
     const isScheduledDenom = c.isCompleted || c.isCanceled || c.isNoShow;
@@ -153,14 +164,11 @@ export function calculateDashboardMetrics(
     if (!providerDisruptionMap.has(prov)) {
       providerDisruptionMap.set(prov, { canceled: 0, noShow: 0, rescheduled: 0, scheduledDenom: 0 });
     }
-    if (isScheduledDenom) {
-      providerDisruptionMap.get(prov)!.scheduledDenom++;
-    }
+    if (isScheduledDenom) providerDisruptionMap.get(prov)!.scheduledDenom++;
     if (c.isCanceled) providerDisruptionMap.get(prov)!.canceled++;
     if (c.isNoShow) providerDisruptionMap.get(prov)!.noShow++;
   }
 
-  // Add rescheduled from Report B
   for (const r of cmrRows) {
     const status = normalizeText(r.statusRaw);
     if (containsAny(status, filters.rescheduledKeywords)) {
@@ -205,14 +213,12 @@ export function calculateDashboardMetrics(
 
   const weeklyKept = groupByWeek(completedNonMassageAppts, (a) => a.date, () => 1);
 
-  // Weekly canceled from Report A
   const canceledAppts = appts.filter((a) => {
     const c = classify(a);
     return !c.isExcluded && c.isCanceled;
   });
   const weeklyCanceled = groupByWeek(canceledAppts, (a) => a.date, () => 1);
 
-  // Weekly no-show from Report A
   const noShowAppts = appts.filter((a) => {
     const c = classify(a);
     return !c.isExcluded && c.isNoShow;
@@ -270,7 +276,7 @@ export function calculateDashboardMetrics(
     () => 1
   );
 
-  // Build raw row maps by week for drill-down modals
+  // Raw row maps by week for drill-down
   const weeklyRows = new Map<string, EndOfDayAppointmentRow[]>();
   for (const a of appts) {
     const week = getWeekLabel(a.date);
@@ -294,6 +300,11 @@ export function calculateDashboardMetrics(
     .map(([type, count]) => ({ type, count }));
 
   return {
+    totalScheduled,
+    totalCompleted,
+    totalCanceled,
+    totalNoShow,
+    completionRate: totalScheduled > 0 ? totalCompleted / totalScheduled : 0,
     scheduledROF,
     completedROF,
     rofCompletionRate: scheduledROF > 0 ? completedROF / scheduledROF : 0,
@@ -305,6 +316,7 @@ export function calculateDashboardMetrics(
     avgPerWeek: completedNonMassage / weeks,
     rescheduledCount,
     canceledDetailCount,
+    noShowDetailCount,
     newPatients,
     currentPatients,
     weeklyKept,
@@ -322,5 +334,7 @@ export function calculateDashboardMetrics(
     rescheduledByApptType,
     repeatRescheduledPatients,
     disruptionHeavyPatients,
+    uniqueDisruptionPatients,
+    totalDisruptionEvents: cmrRows.length,
   };
 }

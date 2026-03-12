@@ -263,15 +263,17 @@ export default function OperationalAnalysisPage() {
             <CardDescription className="text-xs">{sequenceAnalysis.totalROFPatients} ROF patients tracked.</CardDescription>
           </CardHeader>
           <CardContent className="space-y-3">
-            <ResponsiveContainer width="100%" height={Math.max(160, sequenceAnalysis.rofPaths.length * 28)}>
-              <BarChart data={sequenceAnalysis.rofPaths} layout="vertical" margin={{ left: 200, right: 10 }}>
-                <CartesianGrid strokeDasharray="3 3" className="stroke-muted" horizontal={false} />
-                <XAxis type="number" className="text-[10px]" />
-                <YAxis type="category" dataKey="path" width={190} tick={<CustomTick />} />
-                <RechartsTooltip contentStyle={tooltipStyle} />
-                <Bar dataKey="count" fill="hsl(var(--secondary))" radius={[0, 3, 3, 0]} name="Patients" />
-              </BarChart>
-            </ResponsiveContainer>
+            <div className="min-w-[680px]">
+              <ResponsiveContainer width="100%" height={Math.max(200, sequenceAnalysis.rofPaths.length * 32)}>
+                <BarChart data={sequenceAnalysis.rofPaths} layout="vertical" margin={{ left: 240, right: 20 }}>
+                  <CartesianGrid strokeDasharray="3 3" className="stroke-muted" horizontal={false} />
+                  <XAxis type="number" className="text-[10px]" />
+                  <YAxis type="category" dataKey="path" width={230} tick={<CustomTick />} />
+                  <RechartsTooltip contentStyle={tooltipStyle} />
+                  <Bar dataKey="count" fill="hsl(var(--secondary))" radius={[0, 3, 3, 0]} name="Patients" />
+                </BarChart>
+              </ResponsiveContainer>
+            </div>
             <div className="text-[10px] text-muted-foreground p-2.5 rounded bg-muted/50 border">
               Patients who moved from ROF into a maintenance-style visit without visible active treatment
               may reflect a complete prior plan or an early maintenance transition — review manually.
