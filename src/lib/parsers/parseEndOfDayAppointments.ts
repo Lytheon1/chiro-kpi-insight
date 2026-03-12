@@ -81,8 +81,16 @@ export function parseEndOfDayAppointments(file: File): Promise<ParsedEndOfDay> {
           ) {
             const status = String(row[5] || "").trim();
             const purpose = String(row[10] || "").trim();
+            const statusLower = status.toLowerCase();
 
-            if (status && purpose && status !== "status") {
+            // Exclude no-show and checked-in rows from Report A
+            // No-shows are tracked via Report B (CMR); checked-in is incomplete
+            const isExcludedStatus =
+              statusLower.includes("no-show") ||
+              statusLower.includes("no show") ||
+              statusLower === "checked-in";
+
+            if (status && purpose && status !== "status" && !isExcludedStatus) {
               // Capture patient name from col[0] — may be blank if PHI removed
               const rawName = String(row[0] || "").trim();
               const patientName = rawName && !normalizeText(rawName).includes("appointments")

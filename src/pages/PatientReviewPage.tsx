@@ -41,7 +41,7 @@ const filterLabels: Record<TabFilter, string> = {
 export default function PatientReviewPage() {
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
-  const { carePathAnalysis, activeFilters, allProviders } = useDashboard();
+  const { carePathAnalysis, cmr, activeFilters, allProviders } = useDashboard();
   
   // Read initial filter from URL
   const urlFilter = searchParams.get('filter');
