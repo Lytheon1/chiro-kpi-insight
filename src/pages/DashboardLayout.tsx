@@ -21,11 +21,12 @@ const navItems = [
 
 export default function DashboardLayout() {
   const navigate = useNavigate();
+  const ctx = useDashboard();
   const {
     isLoaded, endOfDay, filters, setFilters, goals, setGoals,
     selectedProvider, setSelectedProvider, weeksOverride, setWeeksOverride,
-    allProviders, calculatedWeeks,
-  } = useDashboard();
+    allProviders, calculatedWeeks, loadData,
+  } = ctx;
   const [settingsOpen, setSettingsOpen] = useState(false);
 
   // Load data from session storage if not loaded yet
