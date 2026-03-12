@@ -1,22 +1,19 @@
 /**
  * Executive Brief — "Doctor View" page.
- * Designed to be understandable in 10 seconds.
- * Shows: Health Score → Three Questions → Funnel → Insights → Risk + Revenue → Game Plan → Charts
+ * Restyled to match consulting-grade reference design.
+ * Dark navy health score, horizontal funnel bars, collapsible insights, colored game plan.
  */
 import { useNavigate } from 'react-router-dom';
 import { useState } from 'react';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
-import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
-import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
-import { HelpCircle, ArrowRight, Calendar, ChevronDown, DollarSign, AlertTriangle, TrendingUp } from 'lucide-react';
+import { ArrowRight, Calendar, DollarSign, AlertTriangle, TrendingUp } from 'lucide-react';
 import {
-  LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip,
-  ResponsiveContainer, Legend, ReferenceLine,
+  BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip,
+  ResponsiveContainer, Line, LineChart,
 } from 'recharts';
 import { useDashboard } from '@/lib/context/DashboardContext';
 import { ConfidenceBadge } from '@/components/ConfidenceBadge';
-import { METRIC_KEYS } from '@/types/evidence';
 import { STATUS_COLORS, STATUS_BG, STATUS_LABELS, BENCHMARKS, getBenchmarkStatus } from '@/lib/kpi/benchmarks';
 import type { InsightSeverity } from '@/lib/kpi/generateInsights';
 
@@ -25,12 +22,6 @@ const tooltipStyle = {
   border: '1px solid hsl(var(--border))',
   borderRadius: '6px',
   fontSize: '12px',
-};
-
-const severityDot: Record<InsightSeverity, string> = {
-  high: 'bg-destructive',
-  medium: 'bg-warning',
-  low: 'bg-muted-foreground',
 };
 
 const fmt$ = (n: number) => '$' + n.toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 0 });
@@ -44,7 +35,6 @@ export default function ExecutiveBriefPage() {
   } = useDashboard();
   const singleProvider = allProviders.length <= 1;
   const [showAllInsights, setShowAllInsights] = useState(false);
-  const [healthBreakdownOpen, setHealthBreakdownOpen] = useState(false);
 
   if (!metrics) return null;
 
@@ -58,242 +48,164 @@ export default function ExecutiveBriefPage() {
     ? (metrics.totalCanceled + metrics.totalNoShow + metrics.rescheduledCount) / metrics.totalScheduled
     : 0;
 
-  // Find biggest funnel drop-off
   const biggestDrop = patientFunnel?.stages.reduce((worst, s, i) => {
     if (i === 0 || s.conversionRate === null) return worst;
     if (!worst || (s.conversionRate < (worst.conversionRate ?? 1))) return s;
     return worst;
   }, null as typeof patientFunnel.stages[0] | null);
 
-  // Charts
+  // Weekly chart data
   const allWeeks = new Set<string>();
   metrics.weeklyKept.forEach(d => allWeeks.add(d.week));
   metrics.weeklyCanceled.forEach(d => allWeeks.add(d.week));
-
   const keptMap = new Map(metrics.weeklyKept.map(d => [d.week, d.value]));
   const cancelMap = new Map(metrics.weeklyCanceled.map(d => [d.week, d.value]));
-
-  const weeklyComboChart = Array.from(allWeeks).sort().map(week => ({
-    week, kept: keptMap.get(week) ?? 0, canceled: cancelMap.get(week) ?? 0,
+  const weeklyBarChart = Array.from(allWeeks).sort().map(week => ({
+    week, completed: keptMap.get(week) ?? 0, canceled: cancelMap.get(week) ?? 0,
   }));
-
-  const weeklyROFChart = metrics.weeklyROFRate.map(d => ({ week: d.week, rofCompletionRate: d.value * 100 }));
 
   const doNow = insights.filter(i => i.severity === 'high');
   const reviewWeek = insights.filter(i => i.severity === 'medium');
 
   return (
-    <div className="space-y-8">
-      {/* Brief Header */}
-      <div className="space-y-1">
-        <h2 className="text-xl font-bold tracking-tight">
-          {singleProvider && allProviders[0] ? `${allProviders[0]} — Operations Brief` : 'Clinic Operations Brief'}
-        </h2>
-        <div className="flex flex-wrap gap-3 text-xs text-muted-foreground">
-          <span className="flex items-center gap-1"><Calendar className="h-3 w-3" /> {endOfDay?.minDate} — {endOfDay?.maxDate}</span>
-          <span>Reports loaded: 2</span>
-          <span>Generated: {new Date().toLocaleDateString()}</span>
-        </div>
-      </div>
+    <div className="space-y-6">
+      {/* ROW 1: Health Score — dark navy card */}
+      {clinicHealthScore && <HealthScoreCard score={clinicHealthScore} />}
 
-      {/* ROW 1: Clinic Health Score */}
-      {clinicHealthScore && (
-        <Card className={`${STATUS_BG[clinicHealthScore.status]}`}>
-          <CardContent className="py-5 px-6">
-            <div className="flex items-center gap-6 flex-wrap">
-              <div>
-                <div className="text-[10px] text-muted-foreground uppercase tracking-wider mb-1">Clinic Health Score</div>
-                <div className="flex items-center gap-3">
-                  <span className={`text-5xl font-bold ${STATUS_COLORS[clinicHealthScore.status]}`}>
-                    {clinicHealthScore.score}
-                  </span>
-                  <Badge variant="outline" className={`text-xs ${STATUS_BG[clinicHealthScore.status]}`}>
-                    {clinicHealthScore.statusLabel}
-                  </Badge>
-                </div>
-                <div className="text-xs text-muted-foreground mt-1">— (first quarter loaded)</div>
-              </div>
-              <div className="flex-1 min-w-[200px]">
-                <Popover open={healthBreakdownOpen} onOpenChange={setHealthBreakdownOpen}>
-                  <PopoverTrigger asChild>
-                    <button className="text-xs text-primary hover:underline cursor-pointer flex items-center gap-1">
-                      <HelpCircle className="h-3.5 w-3.5" />
-                      View score breakdown
-                    </button>
-                  </PopoverTrigger>
-                  <PopoverContent className="w-[420px] text-xs space-y-2" side="bottom">
-                    <h4 className="font-semibold text-sm">Health Score Components</h4>
-                    <p className="text-muted-foreground">Composite of 5 operational metrics. Each normalized against chiropractic benchmarks.</p>
-                    <div className="space-y-1.5">
-                      {clinicHealthScore.components.map(c => (
-                        <div key={c.label} className="flex items-center justify-between p-1.5 rounded bg-muted/50">
-                          <span>{c.label}</span>
-                          <span className="font-mono">
-                            {(c.rawValue * 100).toFixed(0)}% → {c.weightedContribution.toFixed(0)}/{(c.weight * 100).toFixed(0)} pts
-                          </span>
-                        </div>
-                      ))}
-                    </div>
-                  </PopoverContent>
-                </Popover>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-      )}
-
-      {/* ROW 2: Three-question summary strip */}
-      <div className="grid gap-3 md:grid-cols-3">
-        <QuestionCard
+      {/* ROW 2: Three-question KPI strip */}
+      <div className="grid gap-4 md:grid-cols-3">
+        <KPICard
+          label="SCHEDULE RELIABILITY"
           question="Are we keeping patients?"
-          metric={`${(schedReliability * 100).toFixed(1)}%`}
-          label="Schedule Reliability"
+          value={`${(schedReliability * 100).toFixed(1)}%`}
+          sub={`${metrics.totalCompleted} / ${metrics.totalScheduled} visits completed`}
           benchmark={getBenchmarkStatus(schedReliability, BENCHMARKS.scheduleReliability)}
-          detail={`${metrics.totalCompleted} / ${metrics.totalScheduled} visits completed`}
+          benchmarkThresholds={BENCHMARKS.scheduleReliability}
+          rawValue={schedReliability * 100}
         />
-        <QuestionCard
+        <KPICard
+          label="DISRUPTION RATE"
           question="Are we losing visits?"
-          metric={`${(disruptionRate * 100).toFixed(1)}%`}
-          label="Disruption Rate"
+          value={`${(disruptionRate * 100).toFixed(1)}%`}
+          sub={`${metrics.totalCanceled + metrics.totalNoShow + metrics.rescheduledCount} disruption events`}
           benchmark={getBenchmarkStatus(1 - disruptionRate, BENCHMARKS.disruptionResistance)}
-          detail={`${metrics.totalCanceled + metrics.totalNoShow + metrics.rescheduledCount} disruption events`}
+          benchmarkThresholds={{ excellent: 8, healthy: 15, watch: 22 }}
+          rawValue={disruptionRate * 100}
+          inverted
+          helper={`${metrics.totalCanceled} canceled · ${metrics.rescheduledCount} rescheduled · ${metrics.totalNoShow} no-shows`}
         />
         <div
-          className="p-4 rounded-lg border bg-card cursor-pointer hover:bg-accent/30 transition-colors"
+          className="bg-card border rounded-lg p-4 cursor-pointer hover:shadow-md hover:border-secondary transition-all"
           onClick={() => navigate('/patient-flow')}
         >
-          <div className="text-[10px] text-muted-foreground mb-1">Where are patients dropping off?</div>
-          <div className="text-lg font-bold">
-            {biggestDrop ? `${biggestDrop.label}` : '—'}
+          <div className="text-[11px] text-faint font-medium tracking-wide mb-1">Where are patients dropping off?</div>
+          <div className="font-display text-2xl text-primary">
+            {biggestDrop ? biggestDrop.label : '—'}
           </div>
           {biggestDrop && biggestDrop.dropOff > 0 && (
-            <div className="text-xs text-destructive/70">{biggestDrop.dropOff} patients lost</div>
+            <div className="text-xs text-destructive mt-0.5">{biggestDrop.dropOff} patients lost</div>
           )}
-          <div className="text-[10px] text-primary flex items-center gap-1 mt-1">
+          <div className="text-[10px] text-secondary flex items-center gap-1 mt-2 font-medium">
             View funnel <ArrowRight className="h-2.5 w-2.5" />
           </div>
         </div>
       </div>
 
-      {/* ROW 3: Patient Funnel (compact) */}
+      {/* ROW 3: Patient Funnel — horizontal bars */}
       {patientFunnel && patientFunnel.npPatientCount > 0 && (
-        <Card className="cursor-pointer hover:bg-accent/20 transition-colors" onClick={() => navigate('/patient-flow')}>
-          <CardContent className="py-3 px-4">
-            <div className="flex items-center gap-2 text-[10px] text-muted-foreground uppercase tracking-wider mb-2">
-              Patient Funnel (unique patients)
-              <ArrowRight className="h-2.5 w-2.5" />
+        <Card className="cursor-pointer hover:shadow-md hover:border-secondary transition-all" onClick={() => navigate('/patient-flow')}>
+          <CardHeader className="pb-2">
+            <div className="flex items-center justify-between">
+              <CardTitle className="text-[13px] font-semibold text-primary">Patient Care Funnel</CardTitle>
+              <span className="evidence-label">EVIDENCE</span>
             </div>
-            <div className="flex items-center gap-1 flex-wrap text-sm">
-              {patientFunnel.stages.map((s, i) => (
-                <span key={s.label} className="flex items-center gap-1">
-                  {i > 0 && <span className="text-muted-foreground mx-1">→</span>}
-                  <span className="font-bold">{s.count}</span>
-                  <span className="text-muted-foreground text-xs">{s.label}</span>
-                  {s.conversionRate !== null && (
-                    <span className="text-[10px] text-muted-foreground">({(s.conversionRate * 100).toFixed(0)}%)</span>
-                  )}
-                </span>
-              ))}
+          </CardHeader>
+          <CardContent>
+            <FunnelBars stages={patientFunnel.stages} />
+            <div className="text-[10px] text-faint mt-3 italic">
+              Unique patients per care stage. Click for full funnel details.
             </div>
           </CardContent>
         </Card>
       )}
 
-      {/* ROW 4: Key Findings */}
+      {/* ROW 4: Key Findings — collapsible insight blocks */}
       {insights.length > 0 && (
-        <Card>
-          <CardHeader className="pb-3">
-            <CardTitle className="text-sm font-semibold tracking-tight">Key Findings</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="space-y-1.5">
-              {insights.slice(0, showAllInsights ? undefined : 5).map((insight, i) => (
-                <div key={i} className="flex items-start gap-2.5 py-1.5 text-sm">
-                  <div className={`w-1.5 h-1.5 rounded-full mt-2 shrink-0 ${severityDot[insight.severity]}`} />
-                  <div>
-                    <span>{insight.text}</span>
-                    <span className="text-muted-foreground ml-1 text-xs">— {insight.action}</span>
-                  </div>
-                </div>
-              ))}
-              {insights.length > 5 && (
-                <button
-                  className="text-xs text-primary hover:underline mt-1"
-                  onClick={() => setShowAllInsights(!showAllInsights)}
-                >
-                  {showAllInsights ? 'Show less' : `Show all ${insights.length} findings`}
-                </button>
-              )}
-            </div>
-          </CardContent>
-        </Card>
+        <div className="space-y-3">
+          <div className="text-[9px] font-bold tracking-widest uppercase text-faint">Key Findings</div>
+          {insights.slice(0, showAllInsights ? undefined : 4).map((insight, i) => (
+            <InsightBlock key={i} insight={insight} defaultOpen={i === 0 && insight.severity === 'high'} />
+          ))}
+          {insights.length > 4 && (
+            <button
+              className="text-xs text-secondary font-medium hover:underline"
+              onClick={() => setShowAllInsights(!showAllInsights)}
+            >
+              {showAllInsights ? 'Show fewer' : `Show all ${insights.length} findings`}
+            </button>
+          )}
+        </div>
       )}
 
       {/* ROW 5: Risk + Revenue side by side */}
       <div className="grid gap-4 md:grid-cols-2">
-        {/* Patients at Risk */}
         {patientRisk && (patientRisk.highRiskCount > 0 || patientRisk.mediumRiskCount > 0) && (
-          <Card className="cursor-pointer hover:bg-accent/20 transition-colors" onClick={() => navigate('/patients-at-risk')}>
-            <CardContent className="py-4 px-5">
-              <div className="flex items-center gap-2 mb-2">
-                <AlertTriangle className="h-4 w-4 text-warning" />
-                <span className="text-sm font-semibold">Patients at Risk</span>
+          <Card className="cursor-pointer hover:shadow-md hover:border-secondary transition-all" onClick={() => navigate('/patients-at-risk')}>
+            <CardHeader className="pb-2">
+              <div className="flex items-center justify-between">
+                <CardTitle className="text-[13px] font-semibold text-primary">Patients at Risk</CardTitle>
+                <Badge variant="outline" className="text-[10px] gap-1 bg-destructive/10 text-destructive border-destructive/30">
+                  <span className="w-1 h-1 rounded-full bg-destructive inline-block" />
+                  Action Needed
+                </Badge>
               </div>
-              <div className="flex gap-4">
+            </CardHeader>
+            <CardContent>
+              <div className="flex gap-6">
                 <div>
-                  <span className="text-2xl font-bold text-destructive">{patientRisk.highRiskCount}</span>
-                  <span className="text-xs text-muted-foreground ml-1">High Risk</span>
+                  <div className="kpi-value text-destructive">{patientRisk.highRiskCount}</div>
+                  <div className="text-[11px] text-muted-foreground">High Risk Patients</div>
+                  <div className="text-[10px] text-faint mt-0.5">Contact within 48 hours</div>
                 </div>
                 <div>
-                  <span className="text-2xl font-bold text-warning">{patientRisk.mediumRiskCount}</span>
-                  <span className="text-xs text-muted-foreground ml-1">Medium Risk</span>
+                  <div className="kpi-value text-warning">{patientRisk.mediumRiskCount}</div>
+                  <div className="text-[11px] text-muted-foreground">Medium Risk Patients</div>
+                  <div className="text-[10px] text-faint mt-0.5">Confirm at next visit</div>
                 </div>
               </div>
-              <div className="text-[10px] text-muted-foreground mt-1">
-                Patients showing disruption patterns that predict drop-out
-              </div>
-              <div className="text-[10px] text-primary flex items-center gap-1 mt-2">
-                Review patients <ArrowRight className="h-2.5 w-2.5" />
+              <div className="text-[10px] text-secondary font-medium flex items-center gap-1 mt-3">
+                View all risk patients <ArrowRight className="h-2.5 w-2.5" />
               </div>
             </CardContent>
           </Card>
         )}
 
-        {/* Revenue Leakage */}
         {revenueMetrics && revenueMetrics.estimatedCancellationLeakage > 0 && (
           <Card>
-            <CardContent className="py-4 px-5">
-              <div className="flex items-center gap-2 mb-2">
-                <DollarSign className="h-4 w-4 text-muted-foreground" />
-                <span className="text-sm font-semibold">Revenue Intelligence</span>
-              </div>
-              <div className="space-y-2">
+            <CardHeader className="pb-2">
+              <CardTitle className="text-[13px] font-semibold text-primary">Revenue Intelligence</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="flex gap-6 mb-3">
                 <div>
-                  <div className="text-[10px] text-muted-foreground">Estimated Cancellation Leakage</div>
-                  <div className="text-xl font-bold text-destructive/80">{fmt$(revenueMetrics.estimatedCancellationLeakage)}</div>
-                  <div className="text-[10px] text-muted-foreground">
-                    {revenueMetrics.canceledCount} canceled × {fmt$(revenueMetrics.avgChargePerCompleted)} avg charge
-                  </div>
+                  <div className="revenue-value">{fmt$(revenueMetrics.totalPostedCharges ?? 0)}</div>
+                  <div className="text-[11px] text-muted-foreground">Total Posted Charges</div>
+                  <div className="text-[10px] text-faint">{metrics.totalCompleted} visits × avg {fmt$(revenueMetrics.avgChargePerCompleted)}/visit</div>
                 </div>
-                <div className="flex gap-4">
-                  <div>
-                    <div className="text-[10px] text-muted-foreground">Avg Revenue/NP</div>
-                    <div className="text-sm font-bold">{fmt$(revenueMetrics.avgRevenuePerNP)}</div>
-                  </div>
-                  <div>
-                    <div className="text-[10px] text-muted-foreground">NP Cohort Revenue</div>
-                    <div className="text-sm font-bold">{fmt$(revenueMetrics.npCohortRevenue)}</div>
-                  </div>
+                <div>
+                  <div className="revenue-value text-destructive">{fmt$(revenueMetrics.estimatedCancellationLeakage)}</div>
+                  <div className="text-[11px] text-muted-foreground">Est. Leakage (Canceled)</div>
+                  <div className="text-[10px] text-faint">{revenueMetrics.canceledCount} canceled × {fmt$(revenueMetrics.avgChargePerCompleted)} avg</div>
                 </div>
-                {revenueMetrics.additionalRofPatients > 0 && (
-                  <div className="text-[10px] text-muted-foreground p-2 rounded bg-success/5 border border-success/20">
-                    <TrendingUp className="h-3 w-3 inline mr-1 text-success" />
-                    If NP→ROF improved to 75%: +~{fmt$(revenueMetrics.estimatedAdditionalRevenue)} estimated
-                  </div>
-                )}
               </div>
-              <div className="text-[9px] text-muted-foreground mt-2 italic">
-                Based on posted charges. Actual collections may differ.
+              {revenueMetrics.additionalRofPatients > 0 && (
+                <div className="text-[11px] text-muted-foreground p-2.5 rounded bg-success/5 border border-success/20">
+                  <TrendingUp className="h-3 w-3 inline mr-1 text-success" />
+                  If NP→ROF improved to 75%: +~{fmt$(revenueMetrics.estimatedAdditionalRevenue)} estimated
+                </div>
+              )}
+              <div className="text-[10px] text-faint mt-2 italic">
+                Revenue estimates based on posted charges. Actual collections vary with insurance adjustments.
               </div>
             </CardContent>
           </Card>
@@ -303,24 +215,23 @@ export default function ExecutiveBriefPage() {
       {/* ROW 6: Game Plan */}
       <Card>
         <CardHeader className="pb-3">
-          <CardTitle className="text-sm font-semibold tracking-tight">Operational Game Plan</CardTitle>
-          <CardDescription className="text-xs">Prioritized actions derived from this period's data.</CardDescription>
+          <CardTitle className="text-[13px] font-semibold text-primary">Operational Game Plan</CardTitle>
         </CardHeader>
         <CardContent>
-          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-            <ActionBucket title="Do Now" severity="high" items={[
+          <div className="grid gap-4 sm:grid-cols-2">
+            <GamePlanSection title="DO NOW" className="gameplan-now" titleColor="text-destructive" items={[
               ...doNow.map(i => i.text),
               ...(patientRisk && patientRisk.highRiskCount > 10 ? [`Review ${patientRisk.highRiskCount} high-risk patients.`] : []),
               'Review Patients Needing Review list.',
             ]} />
-            <ActionBucket title="Review This Week" severity="medium" items={[
+            <GamePlanSection title="REVIEW THIS WEEK" className="gameplan-week" titleColor="text-warning" items={[
               ...reviewWeek.map(i => i.text),
               'Audit ROF → active treatment progression.',
               ...(patientRisk && patientRisk.riskDrivers.repeatReschedules > 5
                 ? [`Review ${patientRisk.riskDrivers.repeatReschedules} patients with 2+ reschedules.`]
                 : []),
             ]} />
-            <ActionBucket title="Process Improvements" severity="low" items={[
+            <GamePlanSection title="PROCESS IMPROVEMENTS" className="gameplan-process" titleColor="text-secondary" items={[
               ...(patientFunnel && patientFunnel.npPatientCount > 0 &&
                 patientFunnel.rofPatientCount / patientFunnel.npPatientCount < 0.70
                 ? ['Consider scheduling ROF at point of NP visit.']
@@ -330,115 +241,230 @@ export default function ExecutiveBriefPage() {
                 ? ['Review front desk reschedule recovery protocol.']
                 : []),
             ]} />
-            <ActionBucket title="Monitor Next Quarter" severity="neutral" items={[
+            <GamePlanSection title="MONITOR NEXT QUARTER" className="gameplan-monitor" titleColor="text-success" items={[
               'NP → ROF conversion trend',
               'Care continuation rate (3+ treatment visits)',
               'Disruption-heavy patient count',
             ]} />
           </div>
-          <p className="text-[10px] text-muted-foreground mt-4 italic">
-            This game plan reflects operational patterns in the uploaded reports.
-            All items are scheduling and workflow observations — not clinical directives.
-          </p>
+          <div className="text-[11px] text-faint italic border-t mt-4 pt-3">
+            This game plan reflects scheduling and operational patterns in the uploaded reports. All items are workflow observations — not clinical directives.
+          </div>
         </CardContent>
       </Card>
 
-      {/* ROW 7: Summary Charts */}
-      <div className="grid gap-4 md:grid-cols-2">
-        {weeklyComboChart.length > 0 && (
-          <Card className="cursor-pointer hover:bg-accent/20 transition-colors" onClick={() => navigate('/analysis')}>
-            <CardHeader className="pb-2">
-              <div className="text-[9px] text-muted-foreground uppercase tracking-wider">Evidence</div>
-              <CardTitle className="text-xs font-medium">Weekly Completed Appointments</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <ResponsiveContainer width="100%" height={180}>
-                <LineChart data={weeklyComboChart}>
-                  <CartesianGrid strokeDasharray="3 3" className="stroke-muted" />
-                  <XAxis dataKey="week" className="text-[10px]" />
-                  <YAxis className="text-[10px]" />
-                  <RechartsTooltip contentStyle={tooltipStyle} />
-                  <ReferenceLine y={goals.weeklyKept} stroke="hsl(var(--success))" strokeDasharray="3 3" />
-                  <Line type="monotone" dataKey="kept" stroke="hsl(var(--primary))" strokeWidth={2} name="Completed" dot={false} />
-                  <Line type="monotone" dataKey="canceled" stroke="hsl(var(--destructive))" strokeWidth={1} strokeDasharray="4 4" name="Canceled" dot={false} opacity={0.4} />
-                </LineChart>
-              </ResponsiveContainer>
-            </CardContent>
-          </Card>
-        )}
-        {weeklyROFChart.length > 0 && (
-          <Card className="cursor-pointer hover:bg-accent/20 transition-colors" onClick={() => navigate('/analysis')}>
-            <CardHeader className="pb-2">
-              <div className="text-[9px] text-muted-foreground uppercase tracking-wider">Evidence</div>
-              <CardTitle className="text-xs font-medium">ROF Completion Rate</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <ResponsiveContainer width="100%" height={180}>
-                <LineChart data={weeklyROFChart}>
-                  <CartesianGrid strokeDasharray="3 3" className="stroke-muted" />
-                  <XAxis dataKey="week" className="text-[10px]" />
-                  <YAxis className="text-[10px]" domain={[0, 100]} />
-                  <RechartsTooltip formatter={(v: number) => `${v.toFixed(1)}%`} contentStyle={tooltipStyle} />
-                  <ReferenceLine y={goals.rofRate} stroke="hsl(var(--success))" strokeDasharray="3 3" />
-                  <Line type="monotone" dataKey="rofCompletionRate" stroke="hsl(var(--secondary))" strokeWidth={2} name="ROF %" dot={false} />
-                </LineChart>
-              </ResponsiveContainer>
-            </CardContent>
-          </Card>
-        )}
-      </div>
+      {/* ROW 7: Weekly chart */}
+      {weeklyBarChart.length > 0 && (
+        <Card>
+          <CardHeader className="pb-2">
+            <div className="flex items-center justify-between">
+              <CardTitle className="text-[13px] font-semibold text-primary">Weekly Appointment Activity</CardTitle>
+              <span className="evidence-label">EVIDENCE</span>
+            </div>
+          </CardHeader>
+          <CardContent>
+            <ResponsiveContainer width="100%" height={220}>
+              <BarChart data={weeklyBarChart} margin={{ top: 5, right: 10, left: 0, bottom: 30 }}>
+                <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
+                <XAxis dataKey="week" tick={{ fontSize: 10, fill: 'hsl(var(--faint))' }} angle={-40} textAnchor="end" height={50} />
+                <YAxis tick={{ fontSize: 10, fill: 'hsl(var(--faint))' }} />
+                <RechartsTooltip contentStyle={tooltipStyle} />
+                <Bar dataKey="completed" name="Completed" fill="hsl(var(--secondary))" radius={[2, 2, 0, 0]} />
+                <Bar dataKey="canceled" name="Canceled" fill="hsl(347 70% 36% / 0.25)" radius={[2, 2, 0, 0]} />
+              </BarChart>
+            </ResponsiveContainer>
+          </CardContent>
+        </Card>
+      )}
 
       {/* Footer */}
-      <Card>
-        <CardContent className="py-3 px-4 flex items-center gap-3">
-          <ConfidenceBadge confidence={confLabel as any} />
-          <span className="text-xs text-muted-foreground">
-            {totalRows.toLocaleString()} visits analyzed.
-            {confVariance < 3
-              ? ' Totals reconciled within 2%.'
-              : confVariance < 10
-              ? ` Max variance ${confVariance.toFixed(1)}% — review source data.`
-              : ` Significant variance detected (${confVariance.toFixed(1)}%) — see Validation page.`}
-          </span>
-        </CardContent>
-      </Card>
+      <div className="text-[11px] text-faint italic border-t pt-3 flex items-center gap-3">
+        <ConfidenceBadge confidence={confLabel as any} />
+        <span>
+          {totalRows.toLocaleString()} visits analyzed.
+          {confVariance < 3
+            ? ' Totals reconciled within 2%.'
+            : confVariance < 10
+            ? ` Max variance ${confVariance.toFixed(1)}% — review source data.`
+            : ` Significant variance detected (${confVariance.toFixed(1)}%) — see Validation page.`}
+        </span>
+      </div>
     </div>
   );
 }
 
-function QuestionCard({ question, metric, label, benchmark, detail }: {
-  question: string; metric: string; label: string;
-  benchmark: 'excellent' | 'healthy' | 'watch' | 'risk';
-  detail: string;
-}) {
+/* ─── Health Score Card ─── */
+function HealthScoreCard({ score }: { score: any }) {
+  const statusColor =
+    score.score >= 80 ? 'hsl(var(--success))' :
+    score.score >= 70 ? 'hsl(var(--warning))' :
+    'hsl(var(--destructive))';
+
   return (
-    <div className="p-4 rounded-lg border bg-card">
-      <div className="text-[10px] text-muted-foreground mb-1">{question}</div>
-      <div className="flex items-center gap-2">
-        <span className="text-xl font-bold">{metric}</span>
-        <Badge variant="outline" className={`text-[9px] ${STATUS_BG[benchmark]}`}>
+    <div className="health-score-card flex flex-wrap items-center gap-6">
+      <div>
+        <div className="text-[11px] font-medium opacity-60 uppercase tracking-widest mb-1">Clinic Health Score</div>
+        <div className="font-display text-[64px] leading-none" style={{ color: statusColor }}>
+          {score.score}
+        </div>
+        <div className="text-xl font-semibold mt-1" style={{ color: statusColor }}>
+          {score.statusLabel}
+        </div>
+      </div>
+      <div className="flex-1 min-w-[200px]">
+        <div className="text-[12px] opacity-50 mb-2.5">
+          Trend: — (first period loaded)
+        </div>
+        <div className="flex flex-wrap gap-4">
+          {score.components.map((c: any) => (
+            <div key={c.label} className="text-[11px] opacity-65">
+              <strong className="opacity-100 text-primary-foreground">{(c.rawValue * 100).toFixed(0)}%</strong>
+              {' '}{c.label}
+            </div>
+          ))}
+        </div>
+        <div className="text-[11px] opacity-40 mt-3 leading-relaxed">
+          Composite of 5 operational metrics weighted by clinical importance.
+          {score.components
+            .filter((c: any) => c.rawValue < 0.65)
+            .map((c: any) => ` ${c.label} (${(c.rawValue * 100).toFixed(0)}%)`)
+            .join(' and ')
+          }
+          {score.components.some((c: any) => c.rawValue < 0.65) ? ' are the primary watch areas.' : ''}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/* ─── KPI Card ─── */
+function KPICard({ label, question, value, sub, benchmark, benchmarkThresholds, rawValue, inverted, helper }: {
+  label: string; question: string; value: string; sub: string;
+  benchmark: 'excellent' | 'healthy' | 'watch' | 'risk';
+  benchmarkThresholds: { excellent: number; healthy: number; watch: number };
+  rawValue: number; inverted?: boolean; helper?: string;
+}) {
+  const barColor =
+    benchmark === 'excellent' ? 'hsl(var(--success))' :
+    benchmark === 'healthy' ? 'hsl(152 48% 42%)' :
+    benchmark === 'watch' ? 'hsl(var(--warning))' :
+    'hsl(var(--destructive))';
+
+  return (
+    <div className="bg-card border rounded-lg p-4 shadow-sm">
+      <div className="text-[11px] text-faint font-medium tracking-wide">{label}</div>
+      <div className="font-display text-3xl text-primary mt-1">{value}</div>
+      <div className="text-[11px] text-muted-foreground mt-0.5">{sub}</div>
+      <div className="mt-2 flex items-center gap-2">
+        <Badge variant="outline" className={`text-[10px] ${STATUS_BG[benchmark]}`}>
+          <span className="w-1 h-1 rounded-full inline-block mr-1" style={{ background: barColor }} />
           {STATUS_LABELS[benchmark]}
         </Badge>
       </div>
-      <div className="text-xs text-muted-foreground mt-0.5">{label}</div>
-      <div className="text-[10px] text-muted-foreground mt-1">{detail}</div>
+      {/* Benchmark bar */}
+      <div className="mt-2">
+        <div className="benchmark-bar-track">
+          <div className="h-full rounded-full transition-all" style={{
+            width: `${Math.min(100, rawValue)}%`,
+            background: barColor,
+          }} />
+        </div>
+        <div className="flex justify-between text-[9px] text-faint mt-0.5">
+          <span>{inverted ? 'Better ←' : '← Risk'}</span>
+          <span>{inverted ? '→ Risk' : '→ Excellent'}</span>
+        </div>
+      </div>
+      {helper && <div className="text-[10px] text-faint mt-1.5">{helper}</div>}
     </div>
   );
 }
 
-function ActionBucket({ title, severity, items }: { title: string; severity: 'high' | 'medium' | 'low' | 'neutral'; items: string[] }) {
-  const color = severity === 'high' ? 'border-l-destructive'
-    : severity === 'medium' ? 'border-l-warning'
-    : severity === 'low' ? 'border-l-primary'
-    : 'border-l-muted-foreground';
+/* ─── Funnel Bars ─── */
+const FUNNEL_BAR_COLORS = ['hsl(213, 63%, 40%)', 'hsl(190, 80%, 35%)', 'hsl(160, 60%, 35%)', 'hsl(270, 50%, 45%)', 'hsl(30, 80%, 35%)'];
+
+function FunnelBars({ stages }: { stages: Array<{ label: string; count: number; conversionRate: number | null; dropOff: number; dropOffLabel: string }> }) {
+  const max = stages[0]?.count || 1;
   return (
-    <div className={`border-l-2 ${color} pl-3 space-y-1.5`}>
-      <h4 className="text-xs font-semibold">{title}</h4>
-      <ul className="space-y-1">
+    <div className="space-y-1">
+      {stages.map((s, i) => (
+        <div key={s.label} className="flex items-center gap-3 py-2 px-3 rounded hover:bg-accent/30 transition-colors">
+          <div className="flex-1">
+            <div className="text-[12px] font-medium text-primary mb-1">{s.label}</div>
+            <div className="funnel-bar-track">
+              <div
+                className="funnel-bar-fill"
+                style={{
+                  width: `${(s.count / max) * 100}%`,
+                  background: FUNNEL_BAR_COLORS[i] || FUNNEL_BAR_COLORS[0],
+                }}
+              />
+            </div>
+          </div>
+          <div className="font-mono text-lg font-medium text-primary min-w-[30px] text-right">{s.count}</div>
+          <div className="text-[11px] text-muted-foreground min-w-[48px]">
+            {s.conversionRate !== null ? `${(s.conversionRate * 100).toFixed(0)}%` : ''}
+          </div>
+          {s.dropOff > 0 && (
+            <div className="text-[11px] text-destructive flex items-center gap-1 min-w-[70px]">
+              ↓ {s.dropOff} lost
+            </div>
+          )}
+        </div>
+      ))}
+    </div>
+  );
+}
+
+/* ─── Insight Block ─── */
+function InsightBlock({ insight, defaultOpen }: { insight: { severity: InsightSeverity; text: string; action: string }; defaultOpen?: boolean }) {
+  const [open, setOpen] = useState(defaultOpen ?? false);
+  const severityClass =
+    insight.severity === 'high' ? 'insight-block-high' :
+    insight.severity === 'medium' ? 'insight-block-medium' :
+    'insight-block-low';
+  const badgeClass =
+    insight.severity === 'high' ? 'bg-destructive/10 text-destructive border-destructive/30' :
+    insight.severity === 'medium' ? 'bg-warning/10 text-warning border-warning/30' :
+    'bg-muted text-muted-foreground';
+  const badgeLabel =
+    insight.severity === 'high' ? '⚠ High Priority' :
+    insight.severity === 'medium' ? '○ Review' : '· Note';
+
+  return (
+    <div className={`insight-block ${severityClass}`} onClick={() => setOpen(!open)}>
+      <div className="flex items-start justify-between gap-2">
+        <div>
+          <Badge variant="outline" className={`text-[10px] mb-1.5 ${badgeClass}`}>{badgeLabel}</Badge>
+          <div className="text-[13px] font-semibold text-primary">{insight.text}</div>
+        </div>
+        <span className="text-[11px] text-muted-foreground whitespace-nowrap shrink-0">
+          {open ? 'Hide ▲' : 'Details ▼'}
+        </span>
+      </div>
+      {open && (
+        <div className="mt-2.5">
+          <div className="text-[12px] text-secondary font-medium">→ {insight.action}</div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+/* ─── Game Plan Section ─── */
+function GamePlanSection({ title, className, titleColor, items }: {
+  title: string; className: string; titleColor: string; items: string[];
+}) {
+  return (
+    <div className={`p-4 rounded-lg ${className}`}>
+      <h4 className={`text-[11px] font-bold tracking-widest uppercase mb-2 ${titleColor}`}>{title}</h4>
+      <div className="space-y-1.5">
         {items.filter(Boolean).slice(0, 5).map((item, i) => (
-          <li key={i} className="text-[11px] text-muted-foreground leading-tight">{item}</li>
+          <div key={i} className="text-[12px] text-foreground pl-3.5 relative">
+            <span className="absolute left-0 text-faint">→</span>
+            {item}
+          </div>
         ))}
-      </ul>
+      </div>
     </div>
   );
 }
