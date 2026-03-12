@@ -155,6 +155,13 @@ export interface DashboardMetrics {
   disruptionHeavyPatients: number;
   uniqueDisruptionPatients: number;
   totalDisruptionEvents: number;
+  // Operational context — these visits are excluded from chiropractic KPIs
+  // but included in operational summaries for workload visibility.
+  massageScheduled: number;
+  massageCompleted: number;
+  adminScheduled: number;
+  adminCompleted: number;
+  visitTypeBreakdown: Array<{ type: string; scheduled: number; completed: number }>;
 }
 
 export interface ProviderDisruptionRow {

@@ -16,7 +16,10 @@ export const DEFAULT_FILTERS: DashboardFilters = {
   noShowKeywords: ["no show", "no-show", "noshow"],
   rescheduledKeywords: ["rescheduled", "reschedule"],
   rofKeywords: ["rof: chiro", "rof"],
-  massageKeywords: ["massage"],
+  // "therapy" included here because ChiroTouch labels massage services as
+  // "Therapy: 30min", "Therapy: 50min", "Therapy: 80min", etc.
+  // These are operational-only visits excluded from chiropractic KPIs.
+  massageKeywords: ["massage", "therapy"],
   newPatientKeywords: ["new patient", "np: pi", "np: wellness"],
   returnVisitKeywords: ["return visit: chiropractic", "return visit: pi"],
   reExamKeywords: ["re-exam"],
@@ -26,7 +29,8 @@ export const DEFAULT_FILTERS: DashboardFilters = {
   ltcKeywords: ["ltc: chiropractic", "ltc"],
   excludedPurposeKeywords: ["10-min phone", "complimentary 10-min"],
   tractionKeywords: ["spinal decompression", "traction"],
-  therapyKeywords: ["therapy"],
+  // Therapy keywords intentionally empty — "therapy" is in massageKeywords
+  therapyKeywords: [],
 };
 
 export function calculateDashboardMetrics(
@@ -66,6 +70,12 @@ export function calculateDashboardMetrics(
   let scheduledROF = 0, completedROF = 0;
   let scheduledNonMassage = 0, completedNonMassage = 0;
 
+  // Operational counters — massage and admin visits are tracked for operational
+  // context but excluded from chiropractic KPI denominators.
+  let massageScheduled = 0, massageCompleted = 0;
+  let adminScheduled = 0, adminCompleted = 0;
+  const visitTypeCounts = new Map<string, { scheduled: number; completed: number }>();
+
   for (const a of appts) {
     const c = classify(a);
     const isScheduledDenom = c.isCompleted || c.isCanceled || c.isNoShow;
@@ -75,6 +85,23 @@ export function calculateDashboardMetrics(
     if (c.isCompleted) totalCompleted++;
     if (c.isCanceled) totalCanceled++;
     if (c.isNoShow) totalNoShow++;
+
+    // Track visit type breakdown for operational context
+    if (isScheduledDenom) {
+      const vt = a.purposeRaw?.trim() || "Unknown";
+      const entry = visitTypeCounts.get(vt) ?? { scheduled: 0, completed: 0 };
+      entry.scheduled++;
+      if (c.isCompleted) entry.completed++;
+      visitTypeCounts.set(vt, entry);
+    }
+
+    // Operational: massage visits (operational-only, excluded from chiro KPIs)
+    if (c.isMassage && isScheduledDenom) massageScheduled++;
+    if (c.isMassage && c.isCompleted) massageCompleted++;
+
+    // Operational: admin/phone visits
+    if (c.isExcluded && isScheduledDenom) adminScheduled++;
+    if (c.isExcluded && c.isCompleted) adminCompleted++;
     
     if (c.isExcluded) continue;
     if (c.isROF && isScheduledDenom) scheduledROF++;
@@ -82,6 +109,11 @@ export function calculateDashboardMetrics(
     if (!c.isMassage && isScheduledDenom) scheduledNonMassage++;
     if (!c.isMassage && c.isCompleted) completedNonMassage++;
   }
+
+  // Build sorted visit type breakdown for operational display
+  const visitTypeBreakdown = Array.from(visitTypeCounts.entries())
+    .map(([type, counts]) => ({ type, scheduled: counts.scheduled, completed: counts.completed }))
+    .sort((a, b) => b.scheduled - a.scheduled);
 
   const weeks = (() => {
     if (filters.weeksOverride) return filters.weeksOverride;
@@ -336,5 +368,11 @@ export function calculateDashboardMetrics(
     disruptionHeavyPatients,
     uniqueDisruptionPatients,
     totalDisruptionEvents: cmrRows.length,
+    // Operational context — massage and admin counts for workload visibility
+    massageScheduled,
+    massageCompleted,
+    adminScheduled,
+    adminCompleted,
+    visitTypeBreakdown,
   };
 }
