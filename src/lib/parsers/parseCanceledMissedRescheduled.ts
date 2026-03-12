@@ -76,7 +76,7 @@ export function parseCanceledMissedRescheduled(file: File): Promise<ParsedCMR> {
         const seen = new Set<string>();
         const deduped: CmrRow[] = [];
         for (const r of rawRows) {
-          const key = [r.provider, r.date, r.time ?? "", r.apptTypeRaw, r.statusRaw, r.reasonRaw ?? ""].join("|");
+          const key = [r.patientName ?? "", r.provider, r.date, r.time ?? "", r.apptTypeRaw, r.statusRaw, r.reasonRaw ?? ""].join("|");
           if (!seen.has(key)) {
             seen.add(key);
             deduped.push(r);
