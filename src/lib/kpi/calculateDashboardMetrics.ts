@@ -28,9 +28,8 @@ export const DEFAULT_FILTERS: DashboardFilters = {
   supportiveCareKeywords: ["supportive care"],
   ltcKeywords: ["ltc: chiropractic", "ltc"],
   excludedPurposeKeywords: ["10-min phone", "complimentary 10-min"],
-  tractionKeywords: ["spinal decompression", "traction"],
-  // Therapy keywords intentionally empty — "therapy" is in massageKeywords
-  therapyKeywords: [],
+  tractionKeywords: ["spinal decompression", "traction", "shockwave"],
+  therapyKeywords: ["dry needling", "rehab", "cupping"],
 };
 
 export function calculateDashboardMetrics(
