@@ -16,6 +16,7 @@ import { RescheduleInsights } from '@/components/dashboard/RescheduleInsights';
 import { ReasonBreakdown } from '@/components/dashboard/ReasonBreakdown';
 import { ConfidenceBadge } from '@/components/ConfidenceBadge';
 import { containsAny, normalizeText } from '@/lib/utils/normalize';
+import { getProviderColor, isSingleProviderMode } from '@/lib/utils/providerColors';
 import type { EndOfDayAppointmentRow, CmrRow } from '@/types/reports';
 
 const truncate = (s: string, max: number) => s.length > max ? s.slice(0, max) + '…' : s;
@@ -44,9 +45,30 @@ const FUNNEL_COLORS = [
   'hsl(220, 20%, 72%)',
 ];
 
+// ─── Custom NP Next Step Tooltip ────────────────────────────────────────────
+function NPNextStepTooltip({ active, payload, totalNP }: any) {
+  if (!active || !payload || !payload.length) return null;
+  const data = payload[0]?.payload;
+  if (!data) return null;
+  return (
+    <div style={tooltipStyle} className="p-2.5 shadow-md">
+      <div className="font-medium text-xs mb-1">{data.category}</div>
+      <div className="text-[11px]">{data.count} patients</div>
+      <div className="text-[11px] text-muted-foreground">
+        {(data.pctOfCohort * 100).toFixed(1)}% of NP cohort
+      </div>
+      {data.note && (
+        <div className="text-[10px] text-muted-foreground mt-1 italic">{data.note}</div>
+      )}
+    </div>
+  );
+}
+
 export default function OperationalAnalysisPage() {
-  const { metrics, carePathAnalysis, sequenceAnalysis, activeFilters, endOfDay, cmr, goals, validationReport } = useDashboard();
+  const { metrics, carePathAnalysis, sequenceAnalysis, activeFilters, endOfDay, cmr, goals, validationReport, allProviders } = useDashboard();
   const [drilldownWeek, setDrilldownWeek] = useState<string | null>(null);
+
+  const singleProvider = isSingleProviderMode(allProviders);
 
   if (!metrics || !carePathAnalysis) {
     return (
@@ -94,6 +116,12 @@ export default function OperationalAnalysisPage() {
     setDrilldownWeek(drilldownWeek === week ? null : week);
   };
 
+  // Provider colors for bar charts
+  const reschByProviderWithColor = metrics.rescheduledByProvider.map(d => ({
+    ...d,
+    fill: getProviderColor(d.provider),
+  }));
+
   return (
     <div className="space-y-6">
       {/* Pipeline Funnel */}
@@ -127,12 +155,14 @@ export default function OperationalAnalysisPage() {
         </Card>
       )}
 
-      {/* Provider Comparison */}
-      <ProviderComparisonTable
-        carePathMetrics={carePathAnalysis.providerMetrics}
-        disruptions={metrics.providerDisruptions}
-        metrics={metrics}
-      />
+      {/* Provider Comparison — only show table when multiple providers */}
+      {!singleProvider && (
+        <ProviderComparisonTable
+          carePathMetrics={carePathAnalysis.providerMetrics}
+          disruptions={metrics.providerDisruptions}
+          metrics={metrics}
+        />
+      )}
 
       {/* Care Path */}
       <CarePathSection analysis={carePathAnalysis} />
@@ -146,7 +176,9 @@ export default function OperationalAnalysisPage() {
               <Tooltip>
                 <TooltipTrigger><Info className="h-3.5 w-3.5 text-muted-foreground" /></TooltipTrigger>
                 <TooltipContent className="max-w-xs text-xs">
-                  For each patient with a NP visit, this shows their next chronological visit type. ROF is the expected next step.
+                  Shows the next <strong>meaningful</strong> visit step after a New Patient visit.
+                  Duplicate or disrupted scheduling rows are handled separately.
+                  ROF is the expected next step.
                 </TooltipContent>
               </Tooltip>
             </CardTitle>
@@ -157,23 +189,59 @@ export default function OperationalAnalysisPage() {
                   {sequenceAnalysis.unexpectedNextStepCount} ({(sequenceAnalysis.unexpectedNextStepPct * 100).toFixed(0)}%) unexpected next step.
                 </span>
               )}
+              {sequenceAnalysis.duplicateNPCount > 0 && (
+                <span className="text-muted-foreground ml-1">
+                  {sequenceAnalysis.duplicateNPCount} duplicate/rebooked NP rows excluded.
+                </span>
+              )}
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-3">
-            <ResponsiveContainer width="100%" height={Math.max(160, sequenceAnalysis.npNextSteps.length * 28)}>
-              <BarChart data={sequenceAnalysis.npNextSteps} layout="vertical" margin={{ left: 180, right: 10 }}>
+            <ResponsiveContainer width="100%" height={Math.max(160, sequenceAnalysis.npNextSteps.length * 32)}>
+              <BarChart data={sequenceAnalysis.npNextSteps} layout="vertical" margin={{ left: 200, right: 10 }}>
                 <CartesianGrid strokeDasharray="3 3" className="stroke-muted" horizontal={false} />
                 <XAxis type="number" className="text-[10px]" />
-                <YAxis type="category" dataKey="category" width={170} tick={<CustomTick />} />
-                <RechartsTooltip contentStyle={tooltipStyle} />
+                <YAxis type="category" dataKey="category" width={190} tick={<CustomTick />} />
+                <RechartsTooltip content={<NPNextStepTooltip totalNP={sequenceAnalysis.totalNPPatients} />} />
                 <Bar dataKey="count" fill="hsl(var(--primary))" radius={[0, 3, 3, 0]} name="Patients" />
               </BarChart>
             </ResponsiveContainer>
+
+            {/* Companion data table */}
+            <div className="rounded border overflow-auto">
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead className="text-[10px]">Next Step</TableHead>
+                    <TableHead className="text-[10px] text-right">Count</TableHead>
+                    <TableHead className="text-[10px] text-right">% of NP Cohort</TableHead>
+                    <TableHead className="text-[10px]">Note</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {sequenceAnalysis.npNextSteps.map(s => (
+                    <TableRow key={s.category}>
+                      <TableCell className="text-[10px] font-medium">{s.category}</TableCell>
+                      <TableCell className="text-[10px] text-right">{s.count}</TableCell>
+                      <TableCell className="text-[10px] text-right">{(s.pctOfCohort * 100).toFixed(1)}%</TableCell>
+                      <TableCell className="text-[10px] text-muted-foreground">{s.note || '—'}</TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </div>
+
+            <div className="text-[10px] text-muted-foreground p-2.5 rounded bg-muted/50 border">
+              This chart reflects the next meaningful visit step after a New Patient visit.
+              Duplicate or disrupted scheduling rows are handled separately.
+              "Disruption Before ROF" patients still reached ROF but had canceled/rescheduled events first.
+            </div>
+
             <InsightBlock
               observation={`${sequenceAnalysis.unexpectedNextStepCount} of ${sequenceAnalysis.totalNPPatients} NP patients had an unexpected next step.`}
-              interpretation="Patients whose next visit after NP is not ROF may indicate scheduling gaps."
+              interpretation="Patients whose next meaningful visit after NP is not ROF may indicate scheduling gaps or visit-type labeling issues."
               causes={['ROF not scheduled at NP visit', 'Visit-type label mismatch in ChiroTouch', 'Patient returned for different reason']}
-              action="Review NP scheduling workflow to ensure ROF is confirmed."
+              action="Review NP scheduling workflow to ensure ROF is confirmed before patient leaves."
             />
           </CardContent>
         </Card>
@@ -277,7 +345,7 @@ export default function OperationalAnalysisPage() {
       />
 
       {/* Disruption */}
-      <RescheduleInsights metrics={metrics} />
+      <RescheduleInsights metrics={metrics} singleProvider={singleProvider} />
     </div>
   );
 }

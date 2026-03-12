@@ -1,13 +1,14 @@
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { Badge } from '@/components/ui/badge';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
-import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip, ResponsiveContainer } from 'recharts';
-import { Info, AlertCircle } from 'lucide-react';
-import type { DashboardMetrics, ProviderDisruptionRow } from '@/types/reports';
+import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip, ResponsiveContainer, Cell } from 'recharts';
+import { Info } from 'lucide-react';
+import { getProviderColor } from '@/lib/utils/providerColors';
+import type { DashboardMetrics } from '@/types/reports';
 
 interface RescheduleInsightsProps {
   metrics: DashboardMetrics;
+  singleProvider?: boolean;
 }
 
 const truncate = (s: string, max: number) => s.length > max ? s.slice(0, max) + '…' : s;
@@ -21,23 +22,28 @@ const CustomTick = ({ x, y, payload }: any) => (
   </g>
 );
 
-export const RescheduleInsights = ({ metrics }: RescheduleInsightsProps) => {
+const tooltipStyle = {
+  backgroundColor: 'hsl(var(--card))',
+  border: '1px solid hsl(var(--border))',
+  borderRadius: '8px',
+};
+
+export const RescheduleInsights = ({ metrics, singleProvider = false }: RescheduleInsightsProps) => {
   return (
     <div className="space-y-4">
       <Card>
         <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            Reschedule Insights
+          <CardTitle className="flex items-center gap-2 text-sm font-semibold">
+            Reschedule & Disruption Summary
             <Tooltip>
               <TooltipTrigger><Info className="h-4 w-4 text-muted-foreground" /></TooltipTrigger>
-              <TooltipContent className="max-w-xs">
+              <TooltipContent className="max-w-xs text-xs">
                 Rescheduled visits are tracked separately as an operational signal. They do not change
-                the retention rate above, but can indicate scheduling friction, patient instability,
-                or provider-specific patterns.
+                the retention rate, but can indicate scheduling friction or provider-specific patterns.
               </TooltipContent>
             </Tooltip>
           </CardTitle>
-          <CardDescription>
+          <CardDescription className="text-xs">
             Rescheduled visits are tracked separately as an operational signal. They do not change
             the retention rate, but can indicate scheduling friction or provider-specific patterns.
           </CardDescription>
@@ -58,22 +64,33 @@ export const RescheduleInsights = ({ metrics }: RescheduleInsightsProps) => {
           </div>
 
           {/* Charts row */}
-          <div className="grid gap-6 md:grid-cols-2">
-            {/* By Provider */}
+          <div className={`grid gap-6 ${singleProvider ? 'grid-cols-1' : 'md:grid-cols-2'}`}>
+            {/* By Provider — show as summary KPI in single-provider mode */}
             {metrics.rescheduledByProvider.length > 0 && (
               <div>
                 <h4 className="text-sm font-medium mb-2">Rescheduled by Provider</h4>
-                <ResponsiveContainer width="100%" height={Math.max(150, metrics.rescheduledByProvider.length * 32)}>
-                  <BarChart data={metrics.rescheduledByProvider} layout="vertical" margin={{ left: 120, right: 10 }}>
-                    <CartesianGrid strokeDasharray="3 3" className="stroke-muted" horizontal={false} />
-                    <XAxis type="number" className="text-xs" />
-                    <YAxis type="category" dataKey="provider" width={110} tick={{ fontSize: 11 }} />
-                    <RechartsTooltip
-                      contentStyle={{ backgroundColor: 'hsl(var(--card))', border: '1px solid hsl(var(--border))', borderRadius: '8px' }}
-                    />
-                    <Bar dataKey="count" fill="hsl(var(--primary))" radius={[0, 4, 4, 0]} name="Rescheduled" />
-                  </BarChart>
-                </ResponsiveContainer>
+                {singleProvider ? (
+                  <div className="p-4 rounded-md bg-muted/50 border">
+                    <div className="text-2xl font-bold">{metrics.rescheduledByProvider[0]?.count ?? 0}</div>
+                    <div className="text-sm text-muted-foreground">
+                      Total rescheduled — {metrics.rescheduledByProvider[0]?.provider}
+                    </div>
+                  </div>
+                ) : (
+                  <ResponsiveContainer width="100%" height={Math.max(150, metrics.rescheduledByProvider.length * 32)}>
+                    <BarChart data={metrics.rescheduledByProvider} layout="vertical" margin={{ left: 120, right: 10 }}>
+                      <CartesianGrid strokeDasharray="3 3" className="stroke-muted" horizontal={false} />
+                      <XAxis type="number" className="text-xs" />
+                      <YAxis type="category" dataKey="provider" width={110} tick={{ fontSize: 11 }} />
+                      <RechartsTooltip contentStyle={tooltipStyle} />
+                      <Bar dataKey="count" radius={[0, 4, 4, 0]} name="Rescheduled">
+                        {metrics.rescheduledByProvider.map((entry, i) => (
+                          <Cell key={i} fill={getProviderColor(entry.provider)} />
+                        ))}
+                      </Bar>
+                    </BarChart>
+                  </ResponsiveContainer>
+                )}
               </div>
             )}
 
@@ -86,9 +103,7 @@ export const RescheduleInsights = ({ metrics }: RescheduleInsightsProps) => {
                     <CartesianGrid strokeDasharray="3 3" className="stroke-muted" horizontal={false} />
                     <XAxis type="number" className="text-xs" />
                     <YAxis type="category" dataKey="type" width={140} tick={<CustomTick />} />
-                    <RechartsTooltip
-                      contentStyle={{ backgroundColor: 'hsl(var(--card))', border: '1px solid hsl(var(--border))', borderRadius: '8px' }}
-                    />
+                    <RechartsTooltip contentStyle={tooltipStyle} />
                     <Bar dataKey="count" fill="hsl(var(--warning))" radius={[0, 4, 4, 0]} name="Rescheduled" />
                   </BarChart>
                 </ResponsiveContainer>
@@ -96,15 +111,17 @@ export const RescheduleInsights = ({ metrics }: RescheduleInsightsProps) => {
             )}
           </div>
 
-          {/* Provider Disruption Summary */}
+          {/* Provider Disruption Summary — hide in single-provider if redundant */}
           {metrics.providerDisruptions.length > 0 && (
             <div>
-              <h4 className="text-sm font-medium mb-2">Provider Disruption Summary</h4>
+              <h4 className="text-sm font-medium mb-2">
+                {singleProvider ? 'Disruption Summary' : 'Provider Disruption Summary'}
+              </h4>
               <div className="rounded border overflow-auto">
                 <Table>
                   <TableHeader>
                     <TableRow>
-                      <TableHead>Provider</TableHead>
+                      {!singleProvider && <TableHead>Provider</TableHead>}
                       <TableHead className="text-right">Canceled</TableHead>
                       <TableHead className="text-right">No-Show</TableHead>
                       <TableHead className="text-right">Rescheduled</TableHead>
@@ -115,7 +132,7 @@ export const RescheduleInsights = ({ metrics }: RescheduleInsightsProps) => {
                   <TableBody>
                     {metrics.providerDisruptions.map((d) => (
                       <TableRow key={d.provider}>
-                        <TableCell className="text-xs font-medium">{d.provider}</TableCell>
+                        {!singleProvider && <TableCell className="text-xs font-medium">{d.provider}</TableCell>}
                         <TableCell className="text-xs text-right">{d.canceled}</TableCell>
                         <TableCell className="text-xs text-right">{d.noShow}</TableCell>
                         <TableCell className="text-xs text-right">{d.rescheduled}</TableCell>
