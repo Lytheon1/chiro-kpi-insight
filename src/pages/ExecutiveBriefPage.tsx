@@ -223,7 +223,6 @@ export default function ExecutiveBriefPage() {
                 <div className="text-[11px] text-muted-foreground">Est. Quarterly Leakage</div>
                 <div className="text-[10px] text-faint">{revenueMetrics.canceledCount} canceled × ${revenueMetrics.configuredAvgVisitValue} avg visit</div>
               </div>
-              </div>
 
               {/* Lifetime Opportunity */}
               {revenueMetrics.lifetimeOpportunity.totalLostPatients > 0 && (
