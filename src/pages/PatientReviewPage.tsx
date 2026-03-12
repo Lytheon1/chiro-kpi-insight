@@ -242,6 +242,7 @@ export default function PatientReviewPage() {
               <TabsTrigger value="disruption_heavy" className="text-[10px] h-7">Disruption ({disruptionCount})</TabsTrigger>
               <TabsTrigger value="maintenance" className="text-[10px] h-7">Maintenance</TabsTrigger>
               <TabsTrigger value="quarter_boundary" className="text-[10px] h-7">Quarter</TabsTrigger>
+              <TabsTrigger value="repeat_reschedule" className="text-[10px] h-7">Repeat Resch ({repeatResch})</TabsTrigger>
             </TabsList>
           </Tabs>
           <div className="flex gap-2 flex-wrap">
