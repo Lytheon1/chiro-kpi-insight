@@ -1,20 +1,25 @@
 import { useNavigate } from 'react-router-dom';
 import { DualReportUploader } from '@/components/upload/DualReportUploader';
+import { useDashboard } from '@/lib/context/DashboardContext';
 import type { ParsedEndOfDay, ParsedCMR } from '@/types/reports';
 import { toast } from 'sonner';
 
 const Upload = () => {
   const navigate = useNavigate();
+  const { loadData } = useDashboard();
 
   const handleReportsParsed = (endOfDay: ParsedEndOfDay, cmr: ParsedCMR) => {
-    // Store parsed data in session storage
+    // Store in session storage for persistence across refreshes
     sessionStorage.setItem('parsedEndOfDay', JSON.stringify(endOfDay));
     sessionStorage.setItem('parsedCMR', JSON.stringify(cmr));
+
+    // Load into context
+    loadData(endOfDay, cmr);
 
     toast.success(
       `Parsed ${endOfDay.appointments.length} appointments + ${cmr.rows.length} cancel/reschedule events`
     );
-    navigate('/dashboard');
+    navigate('/summary');
   };
 
   return (
