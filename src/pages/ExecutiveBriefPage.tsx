@@ -63,7 +63,9 @@ export default function ExecutiveBriefPage() {
     <div className="space-y-6">
       {/* Brief Header */}
       <div className="space-y-1">
-        <h2 className="text-xl font-bold tracking-tight">Clinic Operations Brief</h2>
+        <h2 className="text-xl font-bold tracking-tight">
+          {singleProvider && allProviders[0] ? `${allProviders[0]} — Operations Brief` : 'Clinic Operations Brief'}
+        </h2>
         <div className="flex flex-wrap gap-3 text-xs text-muted-foreground">
           <span className="flex items-center gap-1"><Calendar className="h-3 w-3" /> {endOfDay?.minDate} — {endOfDay?.maxDate}</span>
           <span>Reports loaded: 2</span>
