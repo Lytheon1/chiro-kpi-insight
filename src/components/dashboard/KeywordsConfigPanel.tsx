@@ -34,6 +34,8 @@ export const KeywordsConfig = ({ filters, onFiltersChange }: KeywordsConfigProps
         <KeywordInput label="Massage Keywords" value={join(filters.massageKeywords)} onChange={v => update('massageKeywords', v)} />
         <KeywordInput label="New Patient Keywords" value={join(filters.newPatientKeywords)} onChange={v => update('newPatientKeywords', v)} />
         <KeywordInput label="Return Visit / Active Treatment" value={join(filters.returnVisitKeywords)} onChange={v => update('returnVisitKeywords', v)} />
+        <KeywordInput label="Traction Keywords" value={join(filters.tractionKeywords)} onChange={v => update('tractionKeywords', v)} />
+        <KeywordInput label="Therapy Keywords" value={join(filters.therapyKeywords)} onChange={v => update('therapyKeywords', v)} />
         <KeywordInput label="Re-Exam Keywords" value={join(filters.reExamKeywords)} onChange={v => update('reExamKeywords', v)} />
         <KeywordInput label="Final Eval Keywords" value={join(filters.finalEvalKeywords)} onChange={v => update('finalEvalKeywords', v)} />
         <KeywordInput label="PTF Keywords" value={join(filters.ptfKeywords)} onChange={v => update('ptfKeywords', v)} />

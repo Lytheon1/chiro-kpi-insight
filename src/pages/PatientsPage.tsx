@@ -7,13 +7,12 @@ import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
-import { Download, Copy, ChevronLeft, ChevronRight, AlertTriangle, Search, Info } from 'lucide-react';
+import { Download, ChevronLeft, ChevronRight, Search } from 'lucide-react';
 import { toast } from 'sonner';
 import Papa from 'papaparse';
 import { containsAny, normalizeText } from '@/lib/utils/normalize';
-import type { CarePathClassification, PatientJourney, EndOfDayAppointmentRow } from '@/types/reports';
+import type { CarePathClassification, PatientJourney } from '@/types/reports';
 
 type TabFilter = 'all' | 'needsreview' | 'progression_gap' | 'disruption_heavy' | 'maintenance' | 'quarter_boundary';
 type SortKey = 'date' | 'patientName' | 'provider' | 'status' | 'visitType';
@@ -29,7 +28,7 @@ const classLabels: Record<CarePathClassification, string> = {
 };
 
 export default function PatientsPage() {
-  const { carePathAnalysis, endOfDay, filters, activeFilters, allProviders } = useDashboard();
+  const { carePathAnalysis, activeFilters, allProviders } = useDashboard();
   const [tab, setTab] = useState<TabFilter>('all');
   const [search, setSearch] = useState('');
   const [selectedProvider, setSelectedProvider] = useState('all');
@@ -38,56 +37,39 @@ export default function PatientsPage() {
   const [page, setPage] = useState(0);
   const [selectedJourney, setSelectedJourney] = useState<PatientJourney | null>(null);
 
-  if (!carePathAnalysis) {
-    return (
-      <Card>
-        <CardContent className="py-8 text-center text-muted-foreground">
-          No care path analysis available. Upload reports to see patient data.
-        </CardContent>
-      </Card>
-    );
-  }
+  const journeys = carePathAnalysis?.journeys ?? [];
+  const patientsNeedingReview = carePathAnalysis?.patientsNeedingReview ?? [];
 
-  const { journeys, patientsNeedingReview } = carePathAnalysis;
-
-  // Classification counts
-  const classCounts = journeys.reduce<Record<string, number>>((acc, j) => {
-    acc[j.classification] = (acc[j.classification] ?? 0) + 1;
-    return acc;
-  }, {});
+  const classCounts = useMemo(() => {
+    return journeys.reduce<Record<string, number>>((acc, j) => {
+      acc[j.classification] = (acc[j.classification] ?? 0) + 1;
+      return acc;
+    }, {});
+  }, [journeys]);
 
   const needsReviewCount = patientsNeedingReview.length;
   const gapCount = journeys.filter(j => j.classification === 'possible_progression_gap').length;
   const disruptionCount = journeys.filter(j => j.secondaryFlags.includes('disruption_heavy')).length;
-  const repeatNoShow = journeys.filter(j => {
+
+  const repeatNoShow = useMemo(() => journeys.filter(j => {
     const ns = j.visits.filter(v => containsAny(normalizeText(v.statusRaw), activeFilters.noShowKeywords)).length;
     return ns >= 2;
-  }).length;
-  const repeatResch = journeys.filter(j => {
+  }).length, [journeys, activeFilters]);
+
+  const repeatResch = useMemo(() => journeys.filter(j => {
     const rs = j.visits.filter(v => containsAny(normalizeText(v.statusRaw), activeFilters.rescheduledKeywords)).length;
     return rs >= 2;
-  }).length;
+  }).length, [journeys, activeFilters]);
 
-  // Build flat rows from journeys
   const flatRows = useMemo(() => {
     let jList = journeys;
 
     switch (tab) {
-      case 'needsreview':
-        jList = patientsNeedingReview;
-        break;
-      case 'progression_gap':
-        jList = journeys.filter(j => j.classification === 'possible_progression_gap');
-        break;
-      case 'disruption_heavy':
-        jList = journeys.filter(j => j.secondaryFlags.includes('disruption_heavy'));
-        break;
-      case 'maintenance':
-        jList = journeys.filter(j => j.classification === 'maintenance_phase_only');
-        break;
-      case 'quarter_boundary':
-        jList = journeys.filter(j => j.classification === 'quarter_boundary_unclear');
-        break;
+      case 'needsreview': jList = patientsNeedingReview; break;
+      case 'progression_gap': jList = journeys.filter(j => j.classification === 'possible_progression_gap'); break;
+      case 'disruption_heavy': jList = journeys.filter(j => j.secondaryFlags.includes('disruption_heavy')); break;
+      case 'maintenance': jList = journeys.filter(j => j.classification === 'maintenance_phase_only'); break;
+      case 'quarter_boundary': jList = journeys.filter(j => j.classification === 'quarter_boundary_unclear'); break;
     }
 
     if (selectedProvider !== 'all') {
@@ -98,7 +80,6 @@ export default function PatientsPage() {
       jList = jList.filter(j => j.patientName.toLowerCase().includes(q) || j.provider.toLowerCase().includes(q));
     }
 
-    // Flatten: one row per visit
     const rows = jList.flatMap(j =>
       j.visits.map(v => ({
         patientName: j.patientName,
@@ -106,7 +87,6 @@ export default function PatientsPage() {
         date: v.date,
         visitType: v.purposeRaw,
         status: v.statusRaw,
-        reason: '',
         classification: j.classification,
         secondaryFlags: j.secondaryFlags,
         journey: j,
@@ -128,7 +108,17 @@ export default function PatientsPage() {
     });
 
     return rows;
-  }, [journeys, patientsNeedingReview, tab, selectedProvider, search, sortKey, sortDir, activeFilters]);
+  }, [journeys, patientsNeedingReview, tab, selectedProvider, search, sortKey, sortDir]);
+
+  if (!carePathAnalysis) {
+    return (
+      <Card>
+        <CardContent className="py-8 text-center text-muted-foreground">
+          No care path analysis available. Upload reports to see patient data.
+        </CardContent>
+      </Card>
+    );
+  }
 
   const totalPages = Math.ceil(flatRows.length / PAGE_SIZE);
   const paginatedRows = flatRows.slice(page * PAGE_SIZE, (page + 1) * PAGE_SIZE);
@@ -195,7 +185,7 @@ export default function PatientsPage() {
         </CardContent>
       </Card>
 
-      {/* Classification Context Strip */}
+      {/* Classification strip */}
       <div className="flex gap-2 flex-wrap">
         {Object.entries(classCounts).map(([cls, count]) => (
           <Badge
@@ -232,9 +222,9 @@ export default function PatientsPage() {
               <TabsList className="flex-wrap h-auto">
                 <TabsTrigger value="all">All ({journeys.length})</TabsTrigger>
                 <TabsTrigger value="needsreview">Needs Review ({needsReviewCount})</TabsTrigger>
-                <TabsTrigger value="progression_gap">Progression Gap ({gapCount})</TabsTrigger>
-                <TabsTrigger value="disruption_heavy">Disruption-Heavy ({disruptionCount})</TabsTrigger>
-                <TabsTrigger value="maintenance">Maintenance-Only</TabsTrigger>
+                <TabsTrigger value="progression_gap">Gap ({gapCount})</TabsTrigger>
+                <TabsTrigger value="disruption_heavy">Disruption ({disruptionCount})</TabsTrigger>
+                <TabsTrigger value="maintenance">Maintenance</TabsTrigger>
                 <TabsTrigger value="quarter_boundary">Quarter-Boundary</TabsTrigger>
               </TabsList>
             </Tabs>
@@ -266,21 +256,11 @@ export default function PatientsPage() {
             <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead className="cursor-pointer select-none" onClick={() => handleSort('patientName')}>
-                    Patient{sortArrow('patientName')}
-                  </TableHead>
-                  <TableHead className="cursor-pointer select-none" onClick={() => handleSort('provider')}>
-                    Provider{sortArrow('provider')}
-                  </TableHead>
-                  <TableHead className="cursor-pointer select-none" onClick={() => handleSort('date')}>
-                    Date{sortArrow('date')}
-                  </TableHead>
-                  <TableHead className="cursor-pointer select-none" onClick={() => handleSort('visitType')}>
-                    Visit Type{sortArrow('visitType')}
-                  </TableHead>
-                  <TableHead className="cursor-pointer select-none" onClick={() => handleSort('status')}>
-                    Status{sortArrow('status')}
-                  </TableHead>
+                  <TableHead className="cursor-pointer select-none" onClick={() => handleSort('patientName')}>Patient{sortArrow('patientName')}</TableHead>
+                  <TableHead className="cursor-pointer select-none" onClick={() => handleSort('provider')}>Provider{sortArrow('provider')}</TableHead>
+                  <TableHead className="cursor-pointer select-none" onClick={() => handleSort('date')}>Date{sortArrow('date')}</TableHead>
+                  <TableHead className="cursor-pointer select-none" onClick={() => handleSort('visitType')}>Visit Type{sortArrow('visitType')}</TableHead>
+                  <TableHead className="cursor-pointer select-none" onClick={() => handleSort('status')}>Status{sortArrow('status')}</TableHead>
                   <TableHead>Visit #</TableHead>
                   <TableHead>⚠ Flag</TableHead>
                 </TableRow>
@@ -347,7 +327,6 @@ function PatientFlagModal({ journey, filters, onClose }: {
   filters: any;
   onClose: () => void;
 }) {
-  // Build flag reason text
   const reasons: string[] = [];
   const hasROF = journey.visits.some(v => containsAny(normalizeText(v.purposeRaw), filters.rofKeywords));
   const hasActiveTx = journey.visits.some(v => containsAny(normalizeText(v.purposeRaw), filters.returnVisitKeywords));
@@ -372,31 +351,21 @@ function PatientFlagModal({ journey, filters, onClose }: {
 
   const interpretation = (() => {
     switch (journey.classification) {
-      case 'possible_progression_gap':
-        return 'Possible progression gap — treatment path may not have continued as expected.';
-      case 'disruption_heavy':
-        return 'Scheduling friction — repeated disruptions may indicate barriers to care.';
-      case 'quarter_boundary_unclear':
-        return 'Quarter-boundary — ROF is near end of period; follow-through may occur next quarter.';
-      case 'maintenance_phase_only':
-        return 'Maintenance-phase patient — appears to be in SC/LTC continuation phase.';
-      default:
-        return 'Visit pattern may warrant a manual look.';
+      case 'possible_progression_gap': return 'Possible progression gap — treatment path may not have continued as expected.';
+      case 'disruption_heavy': return 'Scheduling friction — repeated disruptions may indicate barriers to care.';
+      case 'quarter_boundary_unclear': return 'Quarter-boundary — ROF is near end of period; follow-through may occur next quarter.';
+      case 'maintenance_phase_only': return 'Maintenance-phase patient — appears to be in SC/LTC continuation phase.';
+      default: return 'Visit pattern may warrant a manual look.';
     }
   })();
 
   const suggestedAction = (() => {
     switch (journey.classification) {
-      case 'possible_progression_gap':
-        return 'Review manually to confirm whether treatment plan was completed before this period.';
-      case 'disruption_heavy':
-        return 'Consider proactive outreach before next scheduled visit.';
-      case 'quarter_boundary_unclear':
-        return 'Monitor only — no action needed if follow-through occurs next quarter.';
-      case 'maintenance_phase_only':
-        return 'Confirm whether the SC/LTC transition was intentional.';
-      default:
-        return 'Verify with provider whether visit-type labeling is accurate.';
+      case 'possible_progression_gap': return 'Review manually to confirm whether treatment plan was completed before this period.';
+      case 'disruption_heavy': return 'Consider proactive outreach before next scheduled visit.';
+      case 'quarter_boundary_unclear': return 'Monitor only — no action needed if follow-through occurs next quarter.';
+      case 'maintenance_phase_only': return 'Confirm whether the SC/LTC transition was intentional.';
+      default: return 'Verify with provider whether visit-type labeling is accurate.';
     }
   })();
 
@@ -406,16 +375,14 @@ function PatientFlagModal({ journey, filters, onClose }: {
         <DialogHeader>
           <DialogTitle>Why {journey.patientName} is on this list</DialogTitle>
         </DialogHeader>
-
         <div className="space-y-4">
-          {/* Visit Timeline */}
           <div>
             <h4 className="text-sm font-medium mb-2">Visit Sequence</h4>
             <div className="space-y-1">
               {journey.visits.map((v, i) => {
-                const isROF = containsAny(normalizeText(v.purposeRaw), filters.rofKeywords);
+                const isROFv = containsAny(normalizeText(v.purposeRaw), filters.rofKeywords);
                 const isNP = containsAny(normalizeText(v.purposeRaw), filters.newPatientKeywords);
-                const isMilestone = isROF || isNP;
+                const isMilestone = isROFv || isNP;
                 return (
                   <div key={i} className={`text-xs flex gap-3 p-1.5 rounded ${isMilestone ? 'bg-primary/10 font-medium' : ''}`}>
                     <span className="w-20 text-muted-foreground">{v.date}</span>
@@ -427,27 +394,18 @@ function PatientFlagModal({ journey, filters, onClose }: {
               })}
             </div>
           </div>
-
-          {/* Flag Reason */}
           <div>
             <h4 className="text-sm font-medium mb-1">Flag Reason</h4>
-            {reasons.map((r, i) => (
-              <p key={i} className="text-sm text-muted-foreground">{r}</p>
-            ))}
+            {reasons.map((r, i) => <p key={i} className="text-sm text-muted-foreground">{r}</p>)}
           </div>
-
-          {/* Interpretation */}
           <div>
             <h4 className="text-sm font-medium mb-1">Interpretation</h4>
             <p className="text-sm text-muted-foreground italic">{interpretation}</p>
           </div>
-
-          {/* Suggested Action */}
           <div>
             <h4 className="text-sm font-medium mb-1">Suggested Next Step</h4>
             <p className="text-sm text-muted-foreground">{suggestedAction}</p>
           </div>
-
           <p className="text-xs text-muted-foreground italic pt-2 border-t">
             This is an operational flag — not a clinical judgment.
           </p>
