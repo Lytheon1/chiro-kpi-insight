@@ -204,11 +204,30 @@ export default function PatientReviewPage() {
         ))}
       </div>
 
+      {/* Active filter badge */}
+      {tab !== 'all' && (
+        <div className="flex items-center gap-2">
+          <Badge variant="secondary" className="text-xs gap-1.5 py-1">
+            Showing: {filterLabels[tab]}
+            <button onClick={() => { setTab('all'); setSearchParams({}); setPage(0); }} className="hover:text-destructive">
+              <X className="h-3 w-3" />
+            </button>
+          </Badge>
+          <span className="text-[10px] text-muted-foreground">
+            Filtered from: Report A + B | Period: {carePathAnalysis ? 'selected range' : ''}
+          </span>
+        </div>
+      )}
+
       {/* Table */}
       <Card>
         <CardHeader className="pb-2">
           <div className="flex items-center justify-between flex-wrap gap-3">
-            <CardTitle className="text-xs font-medium">Patient Operational Table</CardTitle>
+            <CardTitle className="text-xs font-medium">
+              {tab !== 'all'
+                ? `Patients: ${filterLabels[tab]} — ${flatRows.length} rows`
+                : `Patient Operational Table — ${flatRows.length} rows`}
+            </CardTitle>
             <Button variant="outline" size="sm" onClick={exportCSV} className="gap-1 h-7 text-xs">
               <Download className="h-3 w-3" /> Export CSV
             </Button>
