@@ -175,8 +175,12 @@ export function DashboardProvider({ children }: { children: ReactNode }) {
     const npToRofRate = patientFunnel.npPatientCount > 0
       ? patientFunnel.rofPatientCount / patientFunnel.npPatientCount
       : 0;
-    return calculateRevenueMetrics(endOfDay.appointments, activeFilters, npToRofRate, activeFilters.provider);
-  }, [endOfDay, patientFunnel, activeFilters]);
+    return calculateRevenueMetrics(
+      endOfDay.appointments, activeFilters, npToRofRate, activeFilters.provider,
+      goals.avgVisitValue, effectiveWeeks,
+      { npPatientCount: patientFunnel.npPatientCount, rofPatientCount: patientFunnel.rofPatientCount, txStartedCount: patientFunnel.txStartedCount },
+    );
+  }, [endOfDay, patientFunnel, activeFilters, goals.avgVisitValue, effectiveWeeks]);
 
   // Clinic Health Score
   const clinicHealthScore = useMemo(() => {
