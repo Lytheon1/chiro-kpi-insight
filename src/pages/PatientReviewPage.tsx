@@ -77,16 +77,77 @@ export default function PatientReviewPage() {
   const needsReviewCount = patientsNeedingReview.length;
   const gapCount = journeys.filter(j => j.classification === 'possible_progression_gap').length;
   const disruptionCount = journeys.filter(j => j.secondaryFlags.includes('disruption_heavy')).length;
-  const repeatResch = useMemo(() => journeys.filter(j => {
-    const rs = j.visits.filter(v => containsAny(normalizeText(v.statusRaw), activeFilters.rescheduledKeywords)).length;
-    return rs >= 2;
-  }).length, [journeys, activeFilters]);
+  // Build repeat-rescheduled patients from Report B (CMR) data
+  const repeatReschedulePatients = useMemo(() => {
+    if (!cmr) return { names: new Set<string>(), rows: [] as typeof cmr.rows };
+    const reschKeywords = activeFilters.rescheduledKeywords;
+    // Group CMR rows by patient name, filter for rescheduled status
+    const byPatient = new Map<string, typeof cmr.rows>();
+    for (const row of cmr.rows) {
+      if (!row.patientName) continue;
+      const status = normalizeText(row.statusRaw);
+      if (!containsAny(status, reschKeywords)) continue;
+      const key = row.patientName.trim().toLowerCase();
+      if (!byPatient.has(key)) byPatient.set(key, []);
+      byPatient.get(key)!.push(row);
+    }
+    // Keep only patients with 2+ reschedule events
+    const names = new Set<string>();
+    const rows: typeof cmr.rows = [];
+    for (const [key, pRows] of byPatient) {
+      if (pRows.length >= 2) {
+        names.add(key);
+        rows.push(...pRows);
+      }
+    }
+    return { names, rows };
+  }, [cmr, activeFilters.rescheduledKeywords]);
+
+  const repeatResch = repeatReschedulePatients.names.size;
+
   const repeatNoShow = useMemo(() => journeys.filter(j => {
     const ns = j.visits.filter(v => containsAny(normalizeText(v.statusRaw), activeFilters.noShowKeywords)).length;
     return ns >= 2;
   }).length, [journeys, activeFilters]);
 
   const flatRows = useMemo(() => {
+    // For repeat_reschedule tab, build rows from CMR data instead of journeys
+    if (tab === 'repeat_reschedule') {
+      let cmrRows = repeatReschedulePatients.rows;
+      if (selectedProvider !== 'all') cmrRows = cmrRows.filter(r => r.provider === selectedProvider);
+      if (search.trim()) {
+        const q = search.toLowerCase();
+        cmrRows = cmrRows.filter(r =>
+          (r.patientName || '').toLowerCase().includes(q) ||
+          (r.provider || '').toLowerCase().includes(q)
+        );
+      }
+      const rows = cmrRows.map((r, i) => ({
+        patientName: r.patientName || 'Unknown',
+        provider: r.provider || '',
+        date: r.date,
+        visitType: r.apptTypeRaw,
+        status: r.statusRaw,
+        classification: 'needs_review' as CarePathClassification,
+        secondaryFlags: [] as string[],
+        journey: null as any,
+        visitSequence: 0,
+        isFlagged: true,
+      }));
+      rows.sort((a, b) => {
+        let cmp = 0;
+        switch (sortKey) {
+          case 'date': cmp = a.date.localeCompare(b.date); break;
+          case 'patientName': cmp = a.patientName.localeCompare(b.patientName); break;
+          case 'provider': cmp = a.provider.localeCompare(b.provider); break;
+          case 'status': cmp = a.status.localeCompare(b.status); break;
+          case 'visitType': cmp = a.visitType.localeCompare(b.visitType); break;
+        }
+        return sortDir === 'asc' ? cmp : -cmp;
+      });
+      return rows;
+    }
+
     let jList = journeys;
     switch (tab) {
       case 'needsreview': jList = patientsNeedingReview; break;
@@ -94,10 +155,6 @@ export default function PatientReviewPage() {
       case 'disruption_heavy': jList = journeys.filter(j => j.secondaryFlags.includes('disruption_heavy')); break;
       case 'maintenance': jList = journeys.filter(j => j.classification === 'maintenance_phase_only'); break;
       case 'quarter_boundary': jList = journeys.filter(j => j.classification === 'quarter_boundary_unclear'); break;
-      case 'repeat_reschedule': jList = journeys.filter(j => {
-        const rs = j.visits.filter(v => containsAny(normalizeText(v.statusRaw), activeFilters.rescheduledKeywords)).length;
-        return rs >= 2;
-      }); break;
     }
     if (selectedProvider !== 'all') jList = jList.filter(j => j.provider === selectedProvider);
     if (search.trim()) {
@@ -125,7 +182,8 @@ export default function PatientReviewPage() {
       return sortDir === 'asc' ? cmp : -cmp;
     });
     return rows;
-  }, [journeys, patientsNeedingReview, tab, selectedProvider, search, sortKey, sortDir, activeFilters]);
+  }, [journeys, patientsNeedingReview, tab, selectedProvider, search, sortKey, sortDir, activeFilters, repeatReschedulePatients]);
+
 
   if (!carePathAnalysis) {
     return <Card><CardContent className="py-8 text-center text-muted-foreground text-sm">Upload reports to see patient data.</CardContent></Card>;
