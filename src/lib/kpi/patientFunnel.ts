@@ -172,9 +172,9 @@ export function buildPatientFunnel(
     {
       label: 'Maintenance / SC',
       count: maintenance,
-      conversionRate: activeCare > 0 ? maintenance / activeCare : null,
-      dropOff: activeCare - maintenance,
-      dropOffLabel: `${activeCare - maintenance} patients did not reach maintenance phase`,
+      conversionRate: rofPatients > 0 ? maintenance / rofPatients : null,
+      dropOff: Math.max(0, activeCare - maintenance),
+      dropOffLabel: `${Math.max(0, activeCare - maintenance)} completed without entering maintenance`,
     },
   ];
 
@@ -187,5 +187,6 @@ export function buildPatientFunnel(
     txStartedCount: txStarted,
     activeCareCount: activeCare,
     maintenanceCount: maintenance,
+    allSCLTCPatientCount: allSCLTCPatients,
   };
 }
