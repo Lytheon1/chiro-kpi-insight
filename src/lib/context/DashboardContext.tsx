@@ -186,8 +186,9 @@ export function DashboardProvider({ children }: { children: ReactNode }) {
   const clinicHealthScore = useMemo(() => {
     if (!metrics || !patientFunnel) return null;
 
-    const scheduleReliability = metrics.totalScheduled > 0
-      ? metrics.totalCompleted / metrics.totalScheduled
+    // Schedule Reliability: provider-relevant visits only (excludes massage + admin)
+    const scheduleReliability = metrics.scheduledNonMassage > 0
+      ? metrics.completedNonMassage / metrics.scheduledNonMassage
       : 0;
 
     const treatmentFollowThrough = patientFunnel.rofPatientCount > 0
