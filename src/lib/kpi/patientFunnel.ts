@@ -72,11 +72,14 @@ export function buildPatientFunnel(
     const hasNP = completed.some(v => containsAny(normalizeText(v.purposeRaw), filters.newPatientKeywords));
     const hasROF = completed.some(v => containsAny(normalizeText(v.purposeRaw), filters.rofKeywords));
 
-    // Treatment = return visits, traction visits (non-massage, non-excluded)
+    // Treatment = return visits, traction, therapy, re-exam, final eval
     const isTreatmentVisit = (v: EndOfDayAppointmentRow) => {
       const p = normalizeText(v.purposeRaw);
       return containsAny(p, filters.returnVisitKeywords) ||
-        (filters.tractionKeywords ? containsAny(p, filters.tractionKeywords) : false);
+        (filters.tractionKeywords ? containsAny(p, filters.tractionKeywords) : false) ||
+        (filters.therapyKeywords ? containsAny(p, filters.therapyKeywords) : false) ||
+        containsAny(p, filters.reExamKeywords) ||
+        containsAny(p, filters.finalEvalKeywords);
     };
 
     const hasTx = completed.some(isTreatmentVisit);

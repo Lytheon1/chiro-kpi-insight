@@ -195,8 +195,8 @@ export function DashboardProvider({ children }: { children: ReactNode }) {
       ? patientFunnel.txStartedCount / patientFunnel.rofPatientCount
       : 0;
 
-    const disruptionRate = metrics.totalScheduled > 0
-      ? (metrics.totalCanceled + metrics.totalNoShow + metrics.rescheduledCount) / metrics.totalScheduled
+    const disruptionRate = metrics.scheduledNonMassage > 0
+      ? (metrics.totalCanceled + metrics.totalNoShow + metrics.rescheduledCount) / metrics.scheduledNonMassage
       : 0;
 
     const npToRofConversion = patientFunnel.npPatientCount > 0

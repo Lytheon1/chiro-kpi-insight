@@ -118,9 +118,14 @@ export function analyzeCarePathIntegrity(
         )
       : [];
     const hasFollowUp = visitsAfterROF.length > 0;
-    const hasActiveTreatmentAfterROF = visitsAfterROF.some((v) =>
-      containsAny(normalizeText(v.purposeRaw), filters.returnVisitKeywords)
-    );
+    const hasActiveTreatmentAfterROF = visitsAfterROF.some((v) => {
+      const p = normalizeText(v.purposeRaw);
+      return containsAny(p, filters.returnVisitKeywords) ||
+        (filters.tractionKeywords ? containsAny(p, filters.tractionKeywords) : false) ||
+        (filters.therapyKeywords ? containsAny(p, filters.therapyKeywords) : false) ||
+        containsAny(p, filters.reExamKeywords) ||
+        containsAny(p, filters.finalEvalKeywords);
+    });
     const goesDirectToSC = !hasActiveTreatmentAfterROF &&
       visitsAfterROF.some((v) =>
         containsAny(normalizeText(v.purposeRaw), filters.supportiveCareKeywords)
