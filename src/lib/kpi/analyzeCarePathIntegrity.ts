@@ -77,9 +77,14 @@ export function analyzeCarePathIntegrity(
     const hasLTC = visits.some((v) =>
       containsAny(normalizeText(v.purposeRaw), filters.ltcKeywords)
     );
-    const hasActiveTreatment = visits.some((v) =>
-      containsAny(normalizeText(v.purposeRaw), filters.returnVisitKeywords)
-    );
+    const hasActiveTreatment = visits.some((v) => {
+      const p = normalizeText(v.purposeRaw);
+      return containsAny(p, filters.returnVisitKeywords) ||
+        (filters.tractionKeywords ? containsAny(p, filters.tractionKeywords) : false) ||
+        (filters.therapyKeywords ? containsAny(p, filters.therapyKeywords) : false) ||
+        containsAny(p, filters.reExamKeywords) ||
+        containsAny(p, filters.finalEvalKeywords);
+    });
 
     // Count disruptions from Report A statuses + CMR
     let disruptions = 0;
