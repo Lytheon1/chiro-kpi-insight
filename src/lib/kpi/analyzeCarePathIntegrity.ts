@@ -139,13 +139,23 @@ export function analyzeCarePathIntegrity(
     let classification: CarePathClassification = "needs_review";
     const secondaryFlags: CarePathClassification[] = [];
 
-    // Rule 2: First visible visit is SC/LTC, no ROF
-    const firstPurpose = normalizeText(visits[0].purposeRaw);
-    if (
+    // Check if patient has active treatment AND maintenance (full progression)
+    const hasMaintenanceAfterTx = hasActiveTreatment && (hasSC || hasLTC) && hasROF;
+
+    // Rule 1b: Full progression: ROF → Active Treatment → SC/LTC = maintenance achieved
+    if (hasROF && hasActiveTreatmentAfterROF && (hasSC || hasLTC)) {
+      classification = "maintenance_phase_only";
+    }
+    // Rule 2: First visible visit is SC/LTC, no ROF — ongoing maintenance patient
+    else if (
       !hasROF &&
-      (containsAny(firstPurpose, filters.supportiveCareKeywords) ||
-        containsAny(firstPurpose, filters.ltcKeywords))
+      (containsAny(normalizeText(visits[0].purposeRaw), filters.supportiveCareKeywords) ||
+        containsAny(normalizeText(visits[0].purposeRaw), filters.ltcKeywords))
     ) {
+      classification = "maintenance_phase_only";
+    }
+    // Rule 2b: No ROF, but has active treatment + SC/LTC = maintenance patient
+    else if (!hasROF && hasActiveTreatment && (hasSC || hasLTC)) {
       classification = "maintenance_phase_only";
     }
     // Rule 3: ROF near end, no follow-up
