@@ -32,6 +32,8 @@ export interface PatientFunnelResult {
   txStartedCount: number;
   activeCareCount: number;
   maintenanceCount: number;
+  /** All unique patients with a completed SC/LTC visit this quarter (not restricted to NP cohort) */
+  allSCLTCPatientCount: number;
 }
 
 export function buildPatientFunnel(
@@ -54,6 +56,7 @@ export function buildPatientFunnel(
   }
 
   let npPatients = 0, rofPatients = 0, txStarted = 0, activeCare = 0, maintenance = 0;
+  let allSCLTCPatients = 0;
   const patients = new Map<string, FunnelPatient>();
   const stagePatients: Record<string, FunnelPatient[]> = {
     'New Patients': [],
@@ -89,6 +92,11 @@ export function buildPatientFunnel(
       return containsAny(p, filters.supportiveCareKeywords) || containsAny(p, filters.ltcKeywords);
     });
 
+    // Track ALL patients with SC/LTC visits (not restricted to NP cohort)
+    if (hasSCLTC) {
+      allSCLTCPatients++;
+    }
+
     const stages: string[] = [];
     const name = visits[0].patientName || key;
     const provider = visits[0].provider || '';
@@ -122,7 +130,8 @@ export function buildPatientFunnel(
       stages.push('Active Care (3+)');
       stagePatients['Active Care (3+)'].push(patient);
     }
-    if (hasROF && hasTx && hasSCLTC) {
+    // RELAXED: Maintenance/SC requires ROF + any SC/LTC visit (does NOT require 3+ active care visits)
+    if (hasROF && hasSCLTC) {
       maintenance++;
       stages.push('Maintenance / SC');
       stagePatients['Maintenance / SC'].push(patient);
@@ -163,9 +172,9 @@ export function buildPatientFunnel(
     {
       label: 'Maintenance / SC',
       count: maintenance,
-      conversionRate: activeCare > 0 ? maintenance / activeCare : null,
-      dropOff: activeCare - maintenance,
-      dropOffLabel: `${activeCare - maintenance} patients did not reach maintenance phase`,
+      conversionRate: rofPatients > 0 ? maintenance / rofPatients : null,
+      dropOff: Math.max(0, activeCare - maintenance),
+      dropOffLabel: `${Math.max(0, activeCare - maintenance)} completed without entering maintenance`,
     },
   ];
 
@@ -178,5 +187,6 @@ export function buildPatientFunnel(
     txStartedCount: txStarted,
     activeCareCount: activeCare,
     maintenanceCount: maintenance,
+    allSCLTCPatientCount: allSCLTCPatients,
   };
 }
