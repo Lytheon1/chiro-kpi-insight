@@ -209,21 +209,34 @@ export default function ExecutiveBriefPage() {
               <CardTitle className="text-[13px] font-semibold text-primary">Revenue Intelligence</CardTitle>
             </CardHeader>
             <CardContent className="space-y-3">
-              {/* Weekly leakage — the headline number */}
+              {/* Weekly leakage headline — reimbursement-based */}
               <div className="p-3 rounded-lg bg-destructive/5 border border-destructive/20">
-                <div className="text-[10px] text-faint font-medium tracking-wide mb-1">WEEKLY REVENUE WALKING OUT THE DOOR</div>
-                <div className="font-display text-3xl text-destructive">
-                  ~{fmt$(revenueMetrics.weeklyLeakage)}<span className="text-base text-muted-foreground">/week</span>
+                <div className="font-display text-2xl text-destructive">
+                  ~{fmt$(revenueMetrics.weeklyCollectedLeakage)}<span className="text-base text-muted-foreground">/week in missed appointment revenue</span>
                 </div>
                 <div className="text-[11px] text-muted-foreground mt-0.5">
-                  ~{revenueMetrics.weeklyLeakageVisits} canceled visits/week × ${revenueMetrics.configuredAvgVisitValue} avg visit
+                  {revenueMetrics.canceledCount} cancellations ÷ {revenueMetrics.effectiveWeeks} weeks × $128 avg reimbursement
                 </div>
               </div>
 
-              <div>
-                <div className="revenue-value text-destructive">{fmt$(revenueMetrics.estimatedCancellationLeakage)}</div>
-                <div className="text-[11px] text-muted-foreground">Est. Quarterly Leakage</div>
-                <div className="text-[10px] text-faint">{revenueMetrics.canceledCount} canceled × ${revenueMetrics.configuredAvgVisitValue} avg visit</div>
+              {/* Two-line leakage display */}
+              <div className="p-3 rounded-lg border bg-muted/30 space-y-2">
+                <div className="text-[10px] text-faint font-medium tracking-wide mb-1">CANCELLATION LEAKAGE</div>
+                <div>
+                  <div className="text-[11px] text-muted-foreground">
+                    <span className="font-semibold text-primary">Billed value foregone:</span> {fmt$(revenueMetrics.billedLeakage)}
+                  </div>
+                  <div className="text-[10px] text-faint">Posted charge proxy — what was billed but not seen</div>
+                </div>
+                <div>
+                  <div className="text-[11px] text-muted-foreground">
+                    <span className="font-semibold text-destructive">Est. collected value lost:</span> ~{fmt$(revenueMetrics.collectedLeakage)}
+                  </div>
+                  <div className="text-[10px] text-faint">Based on ~$128 avg reimbursement per visit</div>
+                </div>
+                <div className="text-[10px] text-faint italic mt-1">
+                  Range: {fmt$(revenueMetrics.collectedLeakageLow)}–{fmt$(revenueMetrics.collectedLeakageHigh)} depending on payer mix of canceled appointments.
+                </div>
               </div>
 
               {/* Lifetime Opportunity */}
@@ -250,7 +263,7 @@ export default function ExecutiveBriefPage() {
                 </div>
               )}
               <div className="text-[10px] text-faint italic">
-                All estimates use configurable avg visit value (${revenueMetrics.configuredAvgVisitValue}). Adjust in Settings.
+                Reimbursement estimates use $128 weighted avg (RV ~$105, Therapy ~$140, NP ~$250, Decompression ~$120, LTC/SC ~$105, PI ~$150). Billed proxy uses ${revenueMetrics.avgPostedChargePerVisit}/visit.
               </div>
             </CardContent>
           </Card>
