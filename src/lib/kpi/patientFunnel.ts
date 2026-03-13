@@ -32,6 +32,8 @@ export interface PatientFunnelResult {
   txStartedCount: number;
   activeCareCount: number;
   maintenanceCount: number;
+  /** All unique patients with a completed SC/LTC visit this quarter (not restricted to NP cohort) */
+  allSCLTCPatientCount: number;
 }
 
 export function buildPatientFunnel(
