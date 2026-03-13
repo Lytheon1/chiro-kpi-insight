@@ -50,9 +50,10 @@ export default function ExecutiveBriefPage() {
   const confLabel = overallConf === 'high' ? 'high' : overallConf === 'review' ? 'medium' : 'low';
   const confVariance = validationReport?.fields.reduce((max, f) => Math.max(max, f.pctDifference), 0) ?? 0;
 
-  const schedReliability = metrics.totalScheduled > 0 ? metrics.totalCompleted / metrics.totalScheduled : 0;
-  const disruptionRate = metrics.totalScheduled > 0
-    ? (metrics.totalCanceled + metrics.totalNoShow + metrics.rescheduledCount) / metrics.totalScheduled
+  // Schedule Reliability: provider-relevant visits only (excludes massage + admin)
+  const schedReliability = metrics.scheduledNonMassage > 0 ? metrics.completedNonMassage / metrics.scheduledNonMassage : 0;
+  const disruptionRate = metrics.scheduledNonMassage > 0
+    ? (metrics.totalCanceled + metrics.totalNoShow + metrics.rescheduledCount) / metrics.scheduledNonMassage
     : 0;
 
   const biggestDrop = patientFunnel?.stages.reduce((worst, s, i) => {
