@@ -115,9 +115,9 @@ export default function PatientFlowPage() {
     {
       label: 'Schedule Reliability',
       value: schedReliability,
-      sub: `${metrics.totalCompleted} / ${metrics.totalScheduled} visits`,
-      type: 'visit-based',
-      meaning: 'How well the appointment schedule holds. Completed ÷ Scheduled visits.',
+      sub: `${metrics.completedNonMassage} / ${metrics.scheduledNonMassage} provider visits`,
+      type: 'visit-based (excl. massage/admin)',
+      meaning: `Provider-relevant completed visits ÷ scheduled visits. Excludes massage, therapy-only, and admin visits.`,
       benchmarkKey: 'scheduleReliability' as const,
       clickable: false,
     },

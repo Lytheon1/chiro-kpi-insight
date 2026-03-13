@@ -87,9 +87,10 @@ export default function ExecutiveBriefPage() {
           onClick={() => navigate('/patient-flow')}
         >
           <div className="text-[11px] text-faint font-medium tracking-wide">SCHEDULE RELIABILITY</div>
-          <div className="text-[11px] text-faint mb-1">Are we keeping patients?</div>
+          <div className="text-[11px] text-faint mb-1">Are we keeping provider visits?</div>
           <div className="font-display text-3xl text-primary mt-1">{(schedReliability * 100).toFixed(1)}%</div>
-          <div className="text-[11px] text-muted-foreground mt-0.5">{metrics.totalCompleted} / {metrics.totalScheduled} visits completed</div>
+          <div className="text-[11px] text-muted-foreground mt-0.5">{metrics.completedNonMassage} / {metrics.scheduledNonMassage} provider visits</div>
+          <div className="text-[10px] text-faint mt-0.5">Excludes massage, therapy-only, and admin visits</div>
           <div className="mt-2 flex items-center gap-2">
             <Badge variant="outline" className={`text-[10px] ${STATUS_BG[getBenchmarkStatus(schedReliability, BENCHMARKS.scheduleReliability)]}`}>
               {STATUS_LABELS[getBenchmarkStatus(schedReliability, BENCHMARKS.scheduleReliability)]}
