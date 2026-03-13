@@ -244,7 +244,18 @@ export default function PatientFlowPage() {
                   {s.conversionRate !== null ? `${(s.conversionRate * 100).toFixed(0)}%` : ''}
                 </div>
                 {s.dropOff > 0 && (
-                  <div className="text-[11px] text-destructive min-w-[70px]">↓ {s.dropOff} lost</div>
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <div className="text-[11px] text-destructive min-w-[70px]">
+                        ↓ {s.dropOff} {s.label === 'Maintenance / SC' ? 'without maintenance' : 'lost'}
+                      </div>
+                    </TooltipTrigger>
+                    {s.label === 'Maintenance / SC' && (
+                      <TooltipContent className="max-w-xs text-xs">
+                        These patients finished their treatment plan. Some may return; only count as lost if no future visit is scheduled.
+                      </TooltipContent>
+                    )}
+                  </Tooltip>
                 )}
               </div>
             ))}
