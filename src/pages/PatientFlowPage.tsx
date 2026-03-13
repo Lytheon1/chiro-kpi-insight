@@ -267,6 +267,26 @@ export default function PatientFlowPage() {
         </CardContent>
       </Card>
 
+      {/* Practice Stability — all SC/LTC patients this quarter */}
+      {patientFunnel.allSCLTCPatientCount > 0 && (
+        <Card className="border-secondary/30 bg-secondary/5">
+          <CardContent className="py-4 px-5">
+            <div className="flex items-center gap-3">
+              <div className="text-2xl font-bold text-secondary">{patientFunnel.allSCLTCPatientCount}</div>
+              <div>
+                <div className="text-[12px] font-semibold text-primary">Practice Stability — SC/LTC Patients</div>
+                <div className="text-[11px] text-muted-foreground">
+                  patients currently in SC/LTC phase (includes established patients)
+                </div>
+                <div className="text-[10px] text-faint mt-0.5">
+                  SC/LTC patients represent your most stable recurring visit volume.
+                </div>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
       {/* Retention insight text block */}
       <div className="text-[11px] text-muted-foreground p-4 rounded border bg-muted/30 leading-relaxed">
         These three metrics together tell whether patients show up reliably (Schedule Reliability),
