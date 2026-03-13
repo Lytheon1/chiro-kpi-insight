@@ -34,7 +34,8 @@ export default function PatientFlowPage() {
 
   const max = patientFunnel.stages[0]?.count || 1;
 
-  const schedReliability = metrics.totalScheduled > 0 ? (metrics.totalCompleted / metrics.totalScheduled * 100) : 0;
+  // Schedule Reliability: provider-relevant visits (excludes massage + admin)
+  const schedReliability = metrics.scheduledNonMassage > 0 ? (metrics.completedNonMassage / metrics.scheduledNonMassage * 100) : 0;
   const treatmentFollowThrough = patientFunnel.rofPatientCount > 0 ? (patientFunnel.txStartedCount / patientFunnel.rofPatientCount * 100) : 0;
   const careContinuation = patientFunnel.txStartedCount > 0 ? (patientFunnel.activeCareCount / patientFunnel.txStartedCount * 100) : 0;
 
@@ -114,9 +115,9 @@ export default function PatientFlowPage() {
     {
       label: 'Schedule Reliability',
       value: schedReliability,
-      sub: `${metrics.totalCompleted} / ${metrics.totalScheduled} visits`,
-      type: 'visit-based',
-      meaning: 'How well the appointment schedule holds. Completed ÷ Scheduled visits.',
+      sub: `${metrics.completedNonMassage} / ${metrics.scheduledNonMassage} provider visits`,
+      type: 'visit-based (excl. massage/admin)',
+      meaning: `Provider-relevant completed visits ÷ scheduled visits. Excludes massage, therapy-only, and admin visits.`,
       benchmarkKey: 'scheduleReliability' as const,
       clickable: false,
     },

@@ -77,9 +77,14 @@ export function analyzeCarePathIntegrity(
     const hasLTC = visits.some((v) =>
       containsAny(normalizeText(v.purposeRaw), filters.ltcKeywords)
     );
-    const hasActiveTreatment = visits.some((v) =>
-      containsAny(normalizeText(v.purposeRaw), filters.returnVisitKeywords)
-    );
+    const hasActiveTreatment = visits.some((v) => {
+      const p = normalizeText(v.purposeRaw);
+      return containsAny(p, filters.returnVisitKeywords) ||
+        (filters.tractionKeywords ? containsAny(p, filters.tractionKeywords) : false) ||
+        (filters.therapyKeywords ? containsAny(p, filters.therapyKeywords) : false) ||
+        containsAny(p, filters.reExamKeywords) ||
+        containsAny(p, filters.finalEvalKeywords);
+    });
 
     // Count disruptions from Report A statuses + CMR
     let disruptions = 0;
@@ -113,9 +118,14 @@ export function analyzeCarePathIntegrity(
         )
       : [];
     const hasFollowUp = visitsAfterROF.length > 0;
-    const hasActiveTreatmentAfterROF = visitsAfterROF.some((v) =>
-      containsAny(normalizeText(v.purposeRaw), filters.returnVisitKeywords)
-    );
+    const hasActiveTreatmentAfterROF = visitsAfterROF.some((v) => {
+      const p = normalizeText(v.purposeRaw);
+      return containsAny(p, filters.returnVisitKeywords) ||
+        (filters.tractionKeywords ? containsAny(p, filters.tractionKeywords) : false) ||
+        (filters.therapyKeywords ? containsAny(p, filters.therapyKeywords) : false) ||
+        containsAny(p, filters.reExamKeywords) ||
+        containsAny(p, filters.finalEvalKeywords);
+    });
     const goesDirectToSC = !hasActiveTreatmentAfterROF &&
       visitsAfterROF.some((v) =>
         containsAny(normalizeText(v.purposeRaw), filters.supportiveCareKeywords)
@@ -129,13 +139,23 @@ export function analyzeCarePathIntegrity(
     let classification: CarePathClassification = "needs_review";
     const secondaryFlags: CarePathClassification[] = [];
 
-    // Rule 2: First visible visit is SC/LTC, no ROF
-    const firstPurpose = normalizeText(visits[0].purposeRaw);
-    if (
+    // Check if patient has active treatment AND maintenance (full progression)
+    const hasMaintenanceAfterTx = hasActiveTreatment && (hasSC || hasLTC) && hasROF;
+
+    // Rule 1b: Full progression: ROF → Active Treatment → SC/LTC = maintenance achieved
+    if (hasROF && hasActiveTreatmentAfterROF && (hasSC || hasLTC)) {
+      classification = "maintenance_phase_only";
+    }
+    // Rule 2: First visible visit is SC/LTC, no ROF — ongoing maintenance patient
+    else if (
       !hasROF &&
-      (containsAny(firstPurpose, filters.supportiveCareKeywords) ||
-        containsAny(firstPurpose, filters.ltcKeywords))
+      (containsAny(normalizeText(visits[0].purposeRaw), filters.supportiveCareKeywords) ||
+        containsAny(normalizeText(visits[0].purposeRaw), filters.ltcKeywords))
     ) {
+      classification = "maintenance_phase_only";
+    }
+    // Rule 2b: No ROF, but has active treatment + SC/LTC = maintenance patient
+    else if (!hasROF && hasActiveTreatment && (hasSC || hasLTC)) {
       classification = "maintenance_phase_only";
     }
     // Rule 3: ROF near end, no follow-up
