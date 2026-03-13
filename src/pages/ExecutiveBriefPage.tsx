@@ -464,7 +464,7 @@ function FunnelBars({ stages }: { stages: Array<{ label: string; count: number; 
           </div>
           {s.dropOff > 0 && (
             <div className="text-[11px] text-destructive flex items-center gap-1 min-w-[70px]">
-              ↓ {s.dropOff} lost
+              ↓ {s.dropOff} {s.label === 'Maintenance / SC' ? 'without maintenance' : 'lost'}
             </div>
           )}
         </div>
